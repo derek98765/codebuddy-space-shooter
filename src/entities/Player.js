@@ -14,10 +14,14 @@ export class Player {
     this.game = scene.game;
 
     // Physics rectangle as the visual/body
-    this.sprite = scene.physics.add.image(x, y, '__DEFAULT');
     const cfg = SPRITES.player;
-    this._makeTexture('player_tex', cfg.width, cfg.height, cfg.color);
-    this.sprite.setTexture('player_tex');
+    if (scene.textures.exists(cfg.key)) {
+      this.sprite = scene.physics.add.image(x, y, cfg.key);
+      this.sprite.setDisplaySize(cfg.width, cfg.height);
+    } else {
+      this._makeTexture('player_tex', cfg.width, cfg.height, cfg.color);
+      this.sprite = scene.physics.add.image(x, y, 'player_tex');
+    }
     this.sprite.setCollideWorldBounds(true);
     this.sprite.setDepth(10);
 
@@ -134,6 +138,15 @@ export class Player {
       vy *= 0.7071;
     }
     sp.setVelocity(vx, vy);
+
+    // Swap ship sprite based on vertical direction
+    const cfg2 = SPRITES.player;
+    if (this.scene.textures.exists(cfg2.key)) {
+      const nextKey = vy < 0 ? cfg2.keyUp : vy > 0 ? cfg2.keyDown : cfg2.key;
+      if (sp.texture.key !== nextKey) {
+        sp.setTexture(nextKey).setDisplaySize(cfg2.width, cfg2.height);
+      }
+    }
 
     // ── Missile auto-fire (no key needed) ─────────────────────────────────
     if (this._hasMissile && this.missileBullets) {

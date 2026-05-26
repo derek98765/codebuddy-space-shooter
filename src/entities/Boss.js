@@ -24,22 +24,42 @@ export class Boss {
     this.scene = scene;
     const cfg = SPRITES.boss;
 
-    // Always recreate textures so stale cached sizes are never reused
-    this._recreateTexture(scene, 'boss_tex', cfg.width, cfg.height, cfg.color);
-
-    // Accent stripe texture
-    this._recreateTexture(scene, 'boss_accent_tex', cfg.width, cfg.height, null, (g) => {
-      g.fillStyle(0x4444aa, 1);
-      g.fillRect(0, 0, cfg.width, cfg.height);
-      g.fillStyle(0x8888ff, 1);
-      g.fillRect(4, 8, 8, cfg.height - 16);
-      g.fillRect(4, 8, cfg.width - 8, 6);
-    });
-
-    this.sprite = scene.physics.add.image(x, y, 'boss_accent_tex');
+    if (scene.textures.exists(cfg.key)) {
+      this.sprite = scene.physics.add.image(x, y, cfg.key);
+      this.sprite.setDisplaySize(cfg.width, cfg.height);
+    } else {
+      // Fallback: procedural accent rectangle
+      this._recreateTexture(scene, 'boss_accent_tex', cfg.width, cfg.height, null, (g) => {
+        g.fillStyle(0x4444aa, 1);
+        g.fillRect(0, 0, cfg.width, cfg.height);
+        g.fillStyle(0x8888ff, 1);
+        g.fillRect(4, 8, 8, cfg.height - 16);
+        g.fillRect(4, 8, cfg.width - 8, 6);
+      });
+      this.sprite = scene.physics.add.image(x, y, 'boss_accent_tex');
+    }
     this.sprite.setDepth(8);
     this.sprite.body.moves = false;
     this.sprite.body.setAllowGravity(false);
+    // Disable the main sprite body — hitboxes are handled by zones below
+    this.sprite.body.setEnable(false);
+
+    // 3 hitzone proxies (invisible, no texture)
+    // Offsets are relative to boss sprite center, scaled from 1333x1180 → 678x600
+    this._hitZones = [
+      { offX: -13,  offY: -206, w: 216, h:  91 }, // head
+      { offX:  65,  offY:   15, w: 419, h: 311 }, // main body
+      { offX: -230, offY:  -23, w: 186, h:  82 }, // cannon arm
+    ].map(z => {
+      const img = scene.physics.add.image(x + z.offX, y + z.offY, '__DEFAULT');
+      img.setDisplaySize(z.w, z.h);
+      img.setAlpha(0);
+      img.body.moves = false;
+      img.body.setAllowGravity(false);
+      img._offX = z.offX;
+      img._offY = z.offY;
+      return img;
+    });
 
     this.hp    = 600;
     this.maxHp = 600;
@@ -155,8 +175,8 @@ export class Boss {
   get y() { return this.sprite.y; }
 
   _syncBody() {
-    if (this.sprite.body && this.sprite.body.enable) {
-      this.sprite.body.reset(this.sprite.x, this.sprite.y);
+    for (const z of this._hitZones) {
+      if (z.body) z.body.reset(this.sprite.x + z._offX, this.sprite.y + z._offY);
     }
   }
 
@@ -447,13 +467,9 @@ export class Boss {
   hit(damage = 1) {
     if (!this.alive) return;
     this.hp -= damage;
-    this.scene.tweens.add({
-      targets: this.sprite,
-      alpha: 0.2,
-      duration: 60,
-      yoyo: true,
-      onComplete: () => this.sprite.setAlpha(1)
-    });
+    this.sprite.setTintFill(0xffffff);
+    this.sprite.setAlpha(0.6);
+    this.scene.time.delayedCall(70, () => { if (this.sprite) { this.sprite.clearTint(); this.sprite.setAlpha(1); } });
     this.scene.game.events.emit('bossHpUpdate', this.hp, this.maxHp);
 
     if (!this._enraged && this.hp <= this.maxHp * 0.5) {
@@ -488,8 +504,9 @@ export class Boss {
 
   _die() {
     this.alive = false;
-    if (this.sprite.body) {
-      this.sprite.body.setEnable(false);
+    for (const z of this._hitZones) {
+      if (z.body) z.body.setEnable(false);
+      z.setActive(false);
     }
     bossExplosion(this.scene, this.sprite.x, this.sprite.y);
     this.sprite.setActive(false).setVisible(false);
@@ -497,6 +514,7 @@ export class Boss {
   }
 
   destroy() {
+    for (const z of this._hitZones) z.destroy();
     this.sprite.destroy();
   }
 }

@@ -120,14 +120,9 @@ export class EnemyA {
   hit(damage = 1) {
     if (!this.alive) return;
     this.hp -= damage;
-    // Flash white on hit
-    this.scene.tweens.add({
-      targets: this.sprite,
-      alpha: 0.2,
-      duration: 50,
-      yoyo: true,
-      onComplete: () => { if (this.sprite) this.sprite.setAlpha(1); }
-    });
+    this.sprite.setTintFill(0xffffff);
+    this.sprite.setAlpha(0.6);
+    this.scene.time.delayedCall(70, () => { if (this.sprite) { this.sprite.clearTint(); this.sprite.setAlpha(1); } });
     if (this.hp <= 0) {
       this.alive = false;
       if (this.sprite.body) this.sprite.body.setEnable(false);

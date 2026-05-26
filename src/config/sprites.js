@@ -7,8 +7,11 @@
 
 export const SPRITES = {
   player: {
-    width: 40,
-    height: 24,
+    key: 'spaceship-default',
+    keyUp: 'spaceship-up',
+    keyDown: 'spaceship-down',
+    width: 104,
+    height: 62,
     color: 0x4488ff,
   },
   bulletNormal: {
@@ -27,22 +30,23 @@ export const SPRITES = {
     color: 0xff4444,
   },
   enemyA: {
-    width: 32,
-    height: 20,
+    width: 83,
+    height: 52,
     color: 0xff3333,
   },
   enemyB: {
-    width: 28,
-    height: 22,
+    width: 73,
+    height: 57,
     color: 0xff8800,
   },
   enemyC: {
-    width: 44,
-    height: 30,
+    width: 114,
+    height: 78,
     color: 0x22aa44,  // green tank
   },
   boss: {
-    width: 360,
+    key: 'boss',
+    width: 678,
     height: 600,
     color: 0x222244,
   },
@@ -57,8 +61,8 @@ export const SPRITES = {
     color: 0xff6666,
   },
   enemyD: {
-    width: 46,
-    height: 34,
+    width: 120,
+    height: 88,
     color: 0x6622aa,  // purple carrier
   },
 };

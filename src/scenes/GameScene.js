@@ -6,11 +6,19 @@ import { EnemyD } from '../entities/EnemyD.js';
 import { Boss } from '../entities/Boss.js';
 import { PowerUp } from '../entities/PowerUp.js';
 
-const NUM_STARS = 180;
 
 export class GameScene extends Phaser.Scene {
   constructor() {
     super({ key: 'GameScene' });
+  }
+
+  preload() {
+    this.load.image('spaceship-default', 'assets/spaceship-default.png');
+    this.load.image('spaceship-up',      'assets/spaceship-up.png');
+    this.load.image('spaceship-down',    'assets/spaceship-down.png');
+    this.load.image('sky-background',    'assets/sky-background.png');
+    this.load.image('clouds-foreground', 'assets/clouds-foreground.png');
+    this.load.image('boss',              'assets/boss.png');
   }
 
   create() {
@@ -19,22 +27,35 @@ export class GameScene extends Phaser.Scene {
     this._W = W;
     this._H = H;
     this._score = 0;
-    // ── Background stars ──────────────────────────────────────────────────────
-    this._starLayers = [];
-    const starData = [];
-    for (let i = 0; i < NUM_STARS; i++) {
-      starData.push({
-        x: Phaser.Math.Between(0, W),
-        y: Phaser.Math.Between(0, H),
-        size: Phaser.Math.FloatBetween(0.8, 2.2),
-        speed: Phaser.Math.FloatBetween(0.4, 2.0),
-        alpha: Phaser.Math.FloatBetween(0.4, 1.0),
-      });
-    }
-    this._stars = starData;
-    this._starGfx = this.add.graphics().setDepth(0);
+    // ── Scrolling background ──────────────────────────────────────────────────
+    this._bg = this.add.tileSprite(0, 0, W, H, 'sky-background')
+      .setOrigin(0, 0)
+      .setDepth(0);
+    // Scale tile so it fills the screen height
+    const bgTexH = this.textures.get('sky-background').getSourceImage().height;
+    const bgScale = H / bgTexH;
+    this._bg.setTileScale(bgScale, bgScale);
+    this.add.rectangle(0, 0, W, H, 0x000000, 0.2).setOrigin(0, 0).setDepth(1);
+
+    // ── Mid clouds (parallax layer 2) ────────────────────────────────────────
+    const cloudTexH = this.textures.get('clouds-foreground').getSourceImage().height;
+    const midCloudScale = H * 0.245 * 0.75 / cloudTexH; // 25% smaller than foreground
+    const midCloudH = cloudTexH * midCloudScale;
+    this._cloudsMid = this.add.tileSprite(0, H - midCloudH * 0.3, W, midCloudH, 'clouds-foreground')
+      .setOrigin(0, 1)
+      .setTileScale(midCloudScale, midCloudScale)
+      .setAlpha(0.7)
+      .setDepth(1.5);
+
+    // ── Foreground clouds (parallax layer 3) ─────────────────────────────────
+    const cloudScale = H * 0.245 / cloudTexH;
+    const cloudH = cloudTexH * cloudScale;
+    this._clouds = this.add.tileSprite(0, H, W, cloudH, 'clouds-foreground')
+      .setOrigin(0, 1)
+      .setTileScale(cloudScale, cloudScale)
+      .setDepth(2);
     this._scrollLocked = false;
-    this._bgScrollSpeed = 1.0; // multiplier
+    this._bgScrollSpeed = 1.0; // pixels per ms multiplier
 
     // ── Physics world bounds ──────────────────────────────────────────────────
     this.physics.world.setBounds(0, 0, W, H);
@@ -277,20 +298,22 @@ export class GameScene extends Phaser.Scene {
   }
 
   _registerBoss(boss) {
-    this._ensureTargetId(boss.sprite, 'boss');
+    for (const zone of boss._hitZones) {
+      this._ensureTargetId(zone, 'boss');
 
-    this.physics.add.overlap(this.normalBullets, boss.sprite, (_sp, bullet) => {
-      this._handlePlayerBulletHit(bullet, boss, boss.sprite);
-    });
-    this.physics.add.overlap(this.chargedBullets, boss.sprite, (_sp, bullet) => {
-      this._handlePlayerBulletHit(bullet, boss, boss.sprite);
-    });
-    this.physics.add.overlap(this.missileBullets, boss.sprite, (_sp, bullet) => {
-      this._handlePlayerBulletHit(bullet, boss, boss.sprite);
-    });
-    this.physics.add.overlap(this.player.sprite, boss.sprite, () => {
-      if (boss.alive) this._killPlayer();
-    });
+      this.physics.add.overlap(this.normalBullets, zone, (_z, bullet) => {
+        this._handlePlayerBulletHit(bullet, boss, zone);
+      });
+      this.physics.add.overlap(this.chargedBullets, zone, (_z, bullet) => {
+        this._handlePlayerBulletHit(bullet, boss, zone);
+      });
+      this.physics.add.overlap(this.missileBullets, zone, (_z, bullet) => {
+        this._handlePlayerBulletHit(bullet, boss, zone);
+      });
+      this.physics.add.overlap(this.player.sprite, zone, () => {
+        if (boss.alive) this._killPlayer();
+      });
+    }
   }
 
   _registerEnemyD(enemy) {
@@ -586,8 +609,8 @@ export class GameScene extends Phaser.Scene {
 
     this._gameTime += delta;
 
-    // Scrolling star background
-    this._drawStars(delta);
+    // Scrolling background
+    this._scrollBg(delta);
 
     // Wave spawner
     this._checkWaves();
@@ -635,20 +658,10 @@ export class GameScene extends Phaser.Scene {
     this._cullBullets(this.missileBullets);
   }
 
-  _drawStars(delta) {
-    const W = this._W, H = this._H;
-    const g = this._starGfx;
-    g.clear();
-    const speed = this._bgScrollSpeed;
-    for (const s of this._stars) {
-      s.x -= s.speed * speed;
-      if (s.x < 0) {
-        s.x = W + s.size;
-        s.y = Phaser.Math.Between(0, H);
-      }
-      g.fillStyle(0xffffff, s.alpha);
-      g.fillRect(s.x, s.y, s.size, s.size);
-    }
+  _scrollBg(delta) {
+    this._bg.tilePositionX        += delta * 0.05;
+    this._cloudsMid.tilePositionX += delta * 0.2;
+    this._clouds.tilePositionX    += delta * 0.3;
   }
 
   _cullBullets(group) {

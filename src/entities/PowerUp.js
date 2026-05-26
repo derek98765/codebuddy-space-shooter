@@ -30,7 +30,7 @@ export class PowerUp {
     this.alive = true;
 
     const color = COLORS[type] ?? 0xffffff;
-    const size = 18;
+    const size = 70;
 
     this._ensureTexture(scene, `powerup_${type}_tex`, size, color);
     this.sprite = scene.physics.add.image(x, y, `powerup_${type}_tex`);
@@ -44,7 +44,7 @@ export class PowerUp {
 
     // Label overlay
     this._label = scene.add.text(x, y, LABELS[type] ?? '?', {
-      fontSize: '11px',
+      fontSize: '28px',
       fontFamily: 'monospace',
       color: '#000000',
     }).setOrigin(0.5, 0.5).setDepth(13);
