@@ -49,7 +49,7 @@ export class WinScene extends Phaser.Scene {
       btnText.setColor('#44ffaa');
     });
     btnBg.on('pointerdown', () => {
-      this.scene.start('GameScene');
+      this.scene.start('StartScene');
       this.scene.stop();
     });
 

@@ -49,7 +49,7 @@ export class GameOverScene extends Phaser.Scene {
       btnText.setColor('#ff3333');
     });
     btnBg.on('pointerdown', () => {
-      this.scene.start('GameScene');
+      this.scene.start('StartScene');
       this.scene.stop();
     });
 
