@@ -42,8 +42,8 @@ export const SPRITES = {
     color: 0x22aa44,  // green tank
   },
   boss: {
-    width: 240,
-    height: 504,
+    width: 504,
+    height: 240,
     color: 0x222244,
   },
   bossBulletSpread: {
