@@ -1,5 +1,5 @@
 import { SPRITES } from '../config/sprites.js';
-import { explode } from '../utils/particles.js';
+import { explodeSprite } from '../utils/particles.js';
 
 /**
  * Enemy Type B — Kamikaze
@@ -18,8 +18,13 @@ export class EnemyB {
     this.scene = scene;
     const cfg = SPRITES.enemyB;
 
-    this._ensureTexture(scene, 'enemyB_tex', cfg.width, cfg.height, cfg.color);
-    this.sprite = scene.physics.add.image(x, y, 'enemyB_tex');
+    if (scene.textures.exists(cfg.key)) {
+      this.sprite = scene.physics.add.image(x, y, cfg.key);
+      this.sprite.setDisplaySize(cfg.width, cfg.height);
+    } else {
+      this._ensureTexture(scene, 'enemyB_tex', cfg.width, cfg.height, cfg.color);
+      this.sprite = scene.physics.add.image(x, y, 'enemyB_tex');
+    }
     this.sprite.setDepth(8);
     this.sprite.setVelocityX(-130);
 
@@ -92,7 +97,7 @@ export class EnemyB {
     if (this.hp <= 0) {
       this.alive = false;
       if (this.sprite.body) this.sprite.body.setEnable(false);
-      explode(this.scene, this.sprite.x, this.sprite.y, 0xff8800, 14, 0.85);
+      explodeSprite(this.scene, this.sprite.x, this.sprite.y, 90);
       this.sprite.setActive(false).setVisible(false);
     }
   }

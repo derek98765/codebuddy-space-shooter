@@ -1,5 +1,5 @@
 import { SPRITES } from '../config/sprites.js';
-import { explode } from '../utils/particles.js';
+import { explodeSprite } from '../utils/particles.js';
 
 /**
  * Enemy Type C — Tank
@@ -12,8 +12,13 @@ export class EnemyC {
     this.scene = scene;
     const cfg = SPRITES.enemyC;
 
-    this._ensureTexture(scene, 'enemyC_tex', cfg.width, cfg.height, cfg.color);
-    this.sprite = scene.physics.add.image(x, y, 'enemyC_tex');
+    if (scene.textures.exists(cfg.key)) {
+      this.sprite = scene.physics.add.image(x, y, cfg.key);
+      this.sprite.setDisplaySize(cfg.width, cfg.height);
+    } else {
+      this._ensureTexture(scene, 'enemyC_tex', cfg.width, cfg.height, cfg.color);
+      this.sprite = scene.physics.add.image(x, y, 'enemyC_tex');
+    }
     this.sprite.setDepth(8);
     this.sprite.setVelocityX(-55); // slow
 
@@ -81,26 +86,24 @@ export class EnemyC {
   }
 
   _fireOne() {
-    const cfg = SPRITES.bulletEnemy;
-    if (!this.scene.textures.exists('bullet_enemy_tex')) {
+    const texKey = this.scene.textures.exists('bullet-2') ? 'bullet-2' : 'bullet_enemy_tex';
+    if (texKey === 'bullet_enemy_tex' && !this.scene.textures.exists(texKey)) {
+      const cfg = SPRITES.bulletEnemy;
       const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
-      g.fillStyle(cfg.color, 1);
-      g.fillRect(0, 0, cfg.width, cfg.height);
-      g.generateTexture('bullet_enemy_tex', cfg.width, cfg.height);
-      g.destroy();
+      g.fillStyle(cfg.color, 1); g.fillRect(0, 0, cfg.width, cfg.height);
+      g.generateTexture(texKey, cfg.width, cfg.height); g.destroy();
     }
-    const b = this.enemyBullets.get(this.sprite.x, this.sprite.y, 'bullet_enemy_tex');
+    const b = this.enemyBullets.get(this.sprite.x, this.sprite.y, texKey);
     if (!b) return;
-    b.setActive(true).setVisible(true).setDepth(7);
-    b.body.setEnable(true);
-    b.body.reset(this.sprite.x, this.sprite.y);
-
     const angle = Phaser.Math.Angle.Between(
       this.sprite.x, this.sprite.y,
       this._player.x, this._player.y
     );
-    const speed = 175;
-    b.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+    b.setActive(true).setVisible(true).setDepth(7);
+    b.setDisplaySize(22, 22).setRotation(angle);
+    b.body.setEnable(true);
+    b.body.reset(this.sprite.x, this.sprite.y);
+    b.setVelocity(Math.cos(angle) * 175, Math.sin(angle) * 175);
   }
 
   /**
@@ -121,7 +124,7 @@ export class EnemyC {
     if (this.hp <= 0) {
       this.alive = false;
       if (this.sprite.body) this.sprite.body.setEnable(false);
-      explode(this.scene, this.sprite.x, this.sprite.y, 0x22aa44, 18, 1.1);
+      explodeSprite(this.scene, this.sprite.x, this.sprite.y, 110);
       this.sprite.setActive(false).setVisible(false);
     }
   }

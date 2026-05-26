@@ -3,6 +3,11 @@ export class GameOverScene extends Phaser.Scene {
     super({ key: 'GameOverScene' });
   }
 
+  preload() {
+    this.load.image('play-again-btn', 'assets/play-again-btn.png');
+    this.load.image('game-over',      'assets/game-over.png');
+  }
+
   init(data) {
     this._score = data?.score ?? 0;
   }
@@ -14,52 +19,35 @@ export class GameOverScene extends Phaser.Scene {
     // Dark overlay
     this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.85).setDepth(0);
 
-    // Scanline effect strip
-    this.add.rectangle(W / 2, H / 2 - 60, W, 120, 0x110000, 0.6).setDepth(1);
-
-    // Title
-    this.add.text(W / 2, H / 2 - 60, 'GAME OVER', {
-      fontSize: '52px',
-      fontFamily: 'monospace',
-      color: '#ff3333',
-      stroke: '#880000',
-      strokeThickness: 4,
-    }).setOrigin(0.5, 0.5).setDepth(2);
-
-    // Subtitle
-    this.add.text(W / 2, H / 2 + 10, 'Your ship was destroyed.', {
-      fontSize: '16px',
-      fontFamily: 'monospace',
-      color: '#cc8888',
-    }).setOrigin(0.5, 0.5).setDepth(2);
+    // Game Over logo
+    const logoW = Math.min(W * 0.6, 520);
+    const logoH = logoW * (735 / 1313);
+    const logoY = H / 2 - logoH / 2 - 20;
+    this.add.image(W / 2, logoY, 'game-over')
+      .setDisplaySize(logoW, logoH)
+      .setOrigin(0.5, 0.5)
+      .setDepth(2);
 
     // Final score
-    this.add.text(W / 2, H / 2 + 40, 'SCORE  ' + this._score, {
-      fontSize: '20px',
+    const scoreY = logoY + logoH / 2 + 44;
+    this.add.text(W / 2, scoreY, 'SCORE  ' + this._score, {
+      fontSize: '36px',
       fontFamily: 'monospace',
       color: '#ff8888',
     }).setOrigin(0.5, 0.5).setDepth(2);
 
     // Restart button
-    const btnBg = this.add.rectangle(W / 2, H / 2 + 90, 180, 44, 0x330000)
-      .setDepth(2).setInteractive({ useHandCursor: true });
-    const btnBorder = this.add.rectangle(W / 2, H / 2 + 90, 184, 48, 0xff3333, 0)
-      .setDepth(2).setStrokeStyle(2, 0xff3333);
-    const btnText = this.add.text(W / 2, H / 2 + 90, '[ RESTART ]', {
-      fontSize: '18px',
-      fontFamily: 'monospace',
-      color: '#ff3333',
-    }).setOrigin(0.5, 0.5).setDepth(3);
+    const btnW = Math.min(W * 0.28, 240) * 1.25;
+    const btnH = btnW * (564 / 1586);
+    const playBtn = this.add.image(W / 2, scoreY + 72, 'play-again-btn')
+      .setDisplaySize(btnW, btnH)
+      .setOrigin(0.5, 0.5)
+      .setDepth(3)
+      .setInteractive({ useHandCursor: true });
 
-    btnBg.on('pointerover', () => {
-      btnBg.setFillStyle(0x660000);
-      btnText.setColor('#ffffff');
-    });
-    btnBg.on('pointerout', () => {
-      btnBg.setFillStyle(0x330000);
-      btnText.setColor('#ff3333');
-    });
-    btnBg.on('pointerdown', () => {
+    playBtn.on('pointerover', () => playBtn.setScale(playBtn.scaleX * 1.08, playBtn.scaleY * 1.08));
+    playBtn.on('pointerout',  () => playBtn.setDisplaySize(btnW, btnH));
+    playBtn.on('pointerdown', () => {
       this.scene.start('StartScene');
       this.scene.stop();
     });
@@ -70,7 +58,7 @@ export class GameOverScene extends Phaser.Scene {
     this.input.keyboard.once('keydown-ENTER', restart);
 
     // Hint text
-    this.add.text(W / 2, H / 2 + 128, 'or press SPACE / ENTER', {
+    this.add.text(W / 2, scoreY + 72 + btnH / 2 + 24, 'or press SPACE / ENTER', {
       fontSize: '12px',
       fontFamily: 'monospace',
       color: '#883333',

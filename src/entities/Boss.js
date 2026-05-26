@@ -134,8 +134,14 @@ export class Boss {
     g.destroy();
   }
 
+  _spreadTexKey()    { return this.scene.textures.exists('bullet-3') ? 'bullet-3' : 'boss_spread_tex'; }
+  _aimedTexKey()     { return this.scene.textures.exists('bullet-4') ? 'bullet-4' : 'boss_aimed_tex'; }
+  _laserTexKey()     { return this.scene.textures.exists('bullet-6') ? 'bullet-6' : 'boss_laser_tex'; }
+  _beamCoreTexKey()  { return this.scene.textures.exists('bullet-7') ? 'bullet-7' : 'boss_beam_core_tex'; }
+  _beamArcTexKey()   { return this.scene.textures.exists('bullet-8') ? 'bullet-8' : 'boss_beam_arc_tex'; }
+
   _ensureLaserTex() {
-    if (this.scene.textures.exists('boss_laser_tex')) return;
+    if (this.scene.textures.exists('bullet-6') || this.scene.textures.exists('boss_laser_tex')) return;
     const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
     g.fillStyle(0x00ffff, 1);
     g.fillRect(0, 1, 20, 3);
@@ -146,7 +152,7 @@ export class Boss {
   }
 
   _ensureChargeBeamTextures() {
-    if (!this.scene.textures.exists('boss_beam_core_tex')) {
+    if (!this.scene.textures.exists('bullet-7') && !this.scene.textures.exists('boss_beam_core_tex')) {
       const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
       g.fillStyle(0xffee00, 0.6);
       g.fillRect(0, 0, 48, 18);
@@ -157,7 +163,7 @@ export class Boss {
       g.generateTexture('boss_beam_core_tex', 48, 18);
       g.destroy();
     }
-    if (!this.scene.textures.exists('boss_beam_arc_tex')) {
+    if (!this.scene.textures.exists('bullet-8') && !this.scene.textures.exists('boss_beam_arc_tex')) {
       const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
       g.fillStyle(0xffcc00, 0.4);
       g.fillRect(0, 0, 44, 10);
@@ -220,7 +226,8 @@ export class Boss {
   _spreadFan() {
     if (!this.spreadBullets) return;
     const cfg = SPRITES.bossBulletSpread;
-    this._ensureBulletTex('boss_spread_tex', cfg.width, cfg.height, cfg.color);
+    const texKey = this._spreadTexKey();
+    if (texKey === 'boss_spread_tex') this._ensureBulletTex(texKey, cfg.width, cfg.height, cfg.color);
 
     const count    = this._enraged ? 7 : 4;
     const halfSpan = this._enraged ? 40 : 35;
@@ -229,9 +236,10 @@ export class Boss {
     for (let i = 0; i < count; i++) {
       const deg = -halfSpan + (i / (count - 1)) * (halfSpan * 2);
       const rad = Phaser.Math.DegToRad(180 + deg);
-      const b = this.spreadBullets.get(this.sprite.x, this.sprite.y, 'boss_spread_tex');
+      const b = this.spreadBullets.get(this.sprite.x, this.sprite.y, texKey);
       if (!b) continue;
       b.setActive(true).setVisible(true).setDepth(7);
+      b.setDisplaySize(22, 22);
       b.body.setEnable(true);
       b.body.reset(this.sprite.x, this.sprite.y);
       b.setVelocity(Math.cos(rad) * speed, Math.sin(rad) * speed);
@@ -264,15 +272,17 @@ export class Boss {
   _fireSingleAimed() {
     if (!this.aimedBullets || !this._player || !this._player.alive) return;
     const cfg = SPRITES.bossBulletAimed;
-    this._ensureBulletTex('boss_aimed_tex', cfg.width, cfg.height, cfg.color);
+    const texKey = this._aimedTexKey();
+    if (texKey === 'boss_aimed_tex') this._ensureBulletTex(texKey, cfg.width, cfg.height, cfg.color);
 
     const angle = Phaser.Math.Angle.Between(
       this.sprite.x, this.sprite.y,
       this._player.x, this._player.y
     );
-    const b = this.aimedBullets.get(this.sprite.x, this.sprite.y, 'boss_aimed_tex');
+    const b = this.aimedBullets.get(this.sprite.x, this.sprite.y, texKey);
     if (!b) return;
     b.setActive(true).setVisible(true).setDepth(7);
+    b.setDisplaySize(26, 26).setRotation(angle);
     b.body.setEnable(true);
     b.body.reset(this.sprite.x, this.sprite.y);
     const speed = this._enraged ? 300 : 240;
@@ -283,16 +293,18 @@ export class Boss {
   _ringShot() {
     if (!this.spreadBullets) return;
     const cfg = SPRITES.bossBulletSpread;
-    this._ensureBulletTex('boss_spread_tex', cfg.width, cfg.height, cfg.color);
+    const texKey = this._spreadTexKey();
+    if (texKey === 'boss_spread_tex') this._ensureBulletTex(texKey, cfg.width, cfg.height, cfg.color);
 
     const count = this._enraged ? 16 : 12;
     const speed = this._enraged ? 220 : 180;
 
     for (let i = 0; i < count; i++) {
       const rad = Phaser.Math.DegToRad((360 / count) * i);
-      const b = this.spreadBullets.get(this.sprite.x, this.sprite.y, 'boss_spread_tex');
+      const b = this.spreadBullets.get(this.sprite.x, this.sprite.y, texKey);
       if (!b) continue;
       b.setActive(true).setVisible(true).setDepth(7);
+      b.setDisplaySize(22, 22);
       b.body.setEnable(true);
       b.body.reset(this.sprite.x, this.sprite.y);
       b.setVelocity(Math.cos(rad) * speed, Math.sin(rad) * speed);
@@ -345,9 +357,10 @@ export class Boss {
       const offset = spreadCount === 1 ? 0
         : -halfDeg + (i / (spreadCount - 1)) * halfDeg * 2;
       const angle = baseAngle + Phaser.Math.DegToRad(offset);
-      const b = this.aimedBullets.get(this.sprite.x, this.sprite.y, 'boss_laser_tex');
+      const b = this.aimedBullets.get(this.sprite.x, this.sprite.y, this._laserTexKey());
       if (!b) continue;
       b.setActive(true).setVisible(true).setDepth(7);
+      b.setDisplaySize(32, 8).setRotation(angle);
       b.body.setEnable(true);
       b.body.reset(this.sprite.x, this.sprite.y);
       b.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
@@ -439,9 +452,10 @@ export class Boss {
       const jitter = Phaser.Math.FloatBetween(-0.04, 0.04);
       const angle  = this._chargeAimAngle + jitter;
       const speed  = this._enraged ? 680 : 560;
-      const b = this.aimedBullets.get(mx, my, 'boss_beam_core_tex');
+      const b = this.aimedBullets.get(mx, my, this._beamCoreTexKey());
       if (!b) continue;
       b.setActive(true).setVisible(true).setDepth(10);
+      b.setDisplaySize(48, 18);
       b.body.setEnable(true);
       b.body.reset(mx, my);
       b.setRotation(angle);
@@ -453,9 +467,10 @@ export class Boss {
       const jitter = Phaser.Math.FloatBetween(-0.18, 0.18);
       const angle  = this._chargeAimAngle + jitter;
       const speed  = this._enraged ? 600 : 480;
-      const b = this.aimedBullets.get(mx, my, 'boss_beam_arc_tex');
+      const b = this.aimedBullets.get(mx, my, this._beamArcTexKey());
       if (!b) continue;
       b.setActive(true).setVisible(true).setDepth(9);
+      b.setDisplaySize(44, 10);
       b.body.setEnable(true);
       b.body.reset(mx, my);
       b.setRotation(angle);
@@ -508,9 +523,8 @@ export class Boss {
       if (z.body) z.body.setEnable(false);
       z.setActive(false);
     }
-    bossExplosion(this.scene, this.sprite.x, this.sprite.y);
-    this.sprite.setActive(false).setVisible(false);
-    this.scene.game.events.emit('bossDefeated');
+    // Signal GameScene to run the death cinematic — sprite stays visible
+    this.scene.game.events.emit('bossDying', this.sprite);
   }
 
   destroy() {

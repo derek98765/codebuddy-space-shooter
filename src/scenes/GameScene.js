@@ -3,6 +3,7 @@ import { EnemyA } from '../entities/EnemyA.js';
 import { EnemyB } from '../entities/EnemyB.js';
 import { EnemyC } from '../entities/EnemyC.js';
 import { EnemyD } from '../entities/EnemyD.js';
+import { EnemyE } from '../entities/EnemyE.js';
 import { Boss } from '../entities/Boss.js';
 import { PowerUp } from '../entities/PowerUp.js';
 
@@ -19,6 +20,26 @@ export class GameScene extends Phaser.Scene {
     this.load.image('sky-background',    'assets/sky-background.png');
     this.load.image('clouds-foreground', 'assets/clouds-foreground.png');
     this.load.image('boss',              'assets/boss.png');
+    this.load.image('enemy-1',          'assets/enemy-1.png');
+    this.load.image('enemy-2',          'assets/enemy-2.png');
+    this.load.image('enemy-3',          'assets/enemy-3.png');
+    this.load.image('carrier-1',         'assets/carrier-1.png');
+    this.load.image('carrier-2',         'assets/carrier-2.png');
+    this.load.image('carrier-3',         'assets/carrier-3.png');
+    this.load.image('enemy-4',          'assets/enemy-4.png');
+    this.load.image('bullet-1',          'assets/bullet-1.png');
+    this.load.image('bullet-2',          'assets/bullet-2.png');
+    this.load.image('bullet-3',          'assets/bullet-3.png');
+    this.load.image('bullet-4',          'assets/bullet-4.png');
+    this.load.image('bullet-5',          'assets/bullet-5.png');
+    this.load.image('bullet-6',          'assets/bullet-6.png');
+    this.load.image('bullet-7',          'assets/bullet-7.png');
+    this.load.image('bullet-8',          'assets/bullet-8.png');
+    this.load.image('missile',           'assets/misslie.png');
+    this.load.spritesheet('explode', 'assets/explode.png', { frameWidth: 242, frameHeight: 248 });
+    this.load.image('power-up-diverge',  'assets/power-up-diverge.png');
+    this.load.image('power-up-missile',  'assets/power-up-missile.png');
+    this.load.image('power-up-rapid',    'assets/power-up-rapid.png');
   }
 
   create() {
@@ -60,13 +81,19 @@ export class GameScene extends Phaser.Scene {
     // ── Physics world bounds ──────────────────────────────────────────────────
     this.physics.world.setBounds(0, 0, W, H);
 
+    // ── Explosion animation ───────────────────────────────────────────────────
+    if (!this.anims.exists('explode')) {
+      this.anims.create({
+        key: 'explode',
+        frames: this.anims.generateFrameNumbers('explode', { start: 0, end: 4 }),
+        frameRate: 14,
+        repeat: 0,
+      });
+    }
+
     // ── Bullet groups ─────────────────────────────────────────────────────────
     this.normalBullets = this.physics.add.group({
       maxSize: 40,
-      runChildUpdate: false,
-    });
-    this.chargedBullets = this.physics.add.group({
-      maxSize: 10,
       runChildUpdate: false,
     });
     this.enemyBullets = this.physics.add.group({
@@ -89,7 +116,6 @@ export class GameScene extends Phaser.Scene {
     // ── Player ────────────────────────────────────────────────────────────────
     this.player = new Player(this, 100, H / 2);
     this.player.normalBullets = this.normalBullets;
-    this.player.chargedBullets = this.chargedBullets;
     this.player.missileBullets = this.missileBullets;
 
     // ── Enemy containers ──────────────────────────────────────────────────────
@@ -97,6 +123,7 @@ export class GameScene extends Phaser.Scene {
     this.enemiesB = [];
     this.enemiesC = [];
     this.enemiesD = [];
+    this.enemiesE = [];
     this.powerUps = [];
     this.boss = null;
 
@@ -114,13 +141,13 @@ export class GameScene extends Phaser.Scene {
     // ── Collision setup ───────────────────────────────────────────────────────
     this._setupCollisions();
 
-    // ── Boss defeated handler ─────────────────────────────────────────────────
-    this.game.events.off('bossDefeated', this._onBossDefeated, this); // clear any stale from prev run
-    this.game.events.once('bossDefeated', this._onBossDefeated, this);
+    // ── Boss cinematic handler ────────────────────────────────────────────────
+    this.game.events.off('bossDying', this._onBossDying, this);
+    this.game.events.once('bossDying', this._onBossDying, this);
 
     // ── Cleanup on shutdown ───────────────────────────────────────────────────
     this.events.once('shutdown', () => {
-      this.game.events.off('bossDefeated', this._onBossDefeated, this);
+      this.game.events.off('bossDying', this._onBossDying, this);
     });
 
     // ── Launch UIScene in parallel ────────────────────────────────────────────
@@ -169,7 +196,7 @@ export class GameScene extends Phaser.Scene {
 
     const btnClear = mkBtn('Clear Enemies', () => {
       console.log('[DEV] Clear all normal enemies');
-      for (const e of [...this.enemiesA, ...this.enemiesB, ...this.enemiesC, ...this.enemiesD]) {
+      for (const e of [...this.enemiesA, ...this.enemiesB, ...this.enemiesC, ...this.enemiesD, ...this.enemiesE]) {
         if (e.alive) {
           e.alive = false;
           if (e.sprite.body) e.sprite.body.setEnable(false);
@@ -189,7 +216,7 @@ export class GameScene extends Phaser.Scene {
         this._wavesTriggered.add(waveId);
       }
       // Clear any remaining normal enemies
-      for (const e of [...this.enemiesA, ...this.enemiesB, ...this.enemiesC, ...this.enemiesD]) {
+      for (const e of [...this.enemiesA, ...this.enemiesB, ...this.enemiesC, ...this.enemiesD, ...this.enemiesE]) {
         if (e.alive) {
           e.alive = false;
           if (e.sprite.body) e.sprite.body.setEnable(false);
@@ -249,9 +276,6 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.overlap(this.normalBullets, sp, (_sp, bullet) => {
       this._handlePlayerBulletHit(bullet, enemy, sp);
     });
-    this.physics.add.overlap(this.chargedBullets, sp, (_sp, bullet) => {
-      this._handlePlayerBulletHit(bullet, enemy, sp);
-    });
     this.physics.add.overlap(this.missileBullets, sp, (_sp, bullet) => {
       this._handlePlayerBulletHit(bullet, enemy, sp);
     });
@@ -266,9 +290,6 @@ export class GameScene extends Phaser.Scene {
     this._ensureTargetId(sp, 'enemyB');
 
     this.physics.add.overlap(this.normalBullets, sp, (_sp, bullet) => {
-      this._handlePlayerBulletHit(bullet, enemy, sp);
-    });
-    this.physics.add.overlap(this.chargedBullets, sp, (_sp, bullet) => {
       this._handlePlayerBulletHit(bullet, enemy, sp);
     });
     this.physics.add.overlap(this.missileBullets, sp, (_sp, bullet) => {
@@ -286,9 +307,6 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.overlap(this.normalBullets, sp, (_sp, bullet) => {
       this._handlePlayerBulletHit(bullet, enemy, sp);
     });
-    this.physics.add.overlap(this.chargedBullets, sp, (_sp, bullet) => {
-      this._handlePlayerBulletHit(bullet, enemy, sp);
-    });
     this.physics.add.overlap(this.missileBullets, sp, (_sp, bullet) => {
       this._handlePlayerBulletHit(bullet, enemy, sp);
     });
@@ -302,9 +320,6 @@ export class GameScene extends Phaser.Scene {
       this._ensureTargetId(zone, 'boss');
 
       this.physics.add.overlap(this.normalBullets, zone, (_z, bullet) => {
-        this._handlePlayerBulletHit(bullet, boss, zone);
-      });
-      this.physics.add.overlap(this.chargedBullets, zone, (_z, bullet) => {
         this._handlePlayerBulletHit(bullet, boss, zone);
       });
       this.physics.add.overlap(this.missileBullets, zone, (_z, bullet) => {
@@ -323,7 +338,19 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.overlap(this.normalBullets, sp, (_sp, bullet) => {
       this._handlePlayerBulletHit(bullet, enemy, sp);
     });
-    this.physics.add.overlap(this.chargedBullets, sp, (_sp, bullet) => {
+    this.physics.add.overlap(this.missileBullets, sp, (_sp, bullet) => {
+      this._handlePlayerBulletHit(bullet, enemy, sp);
+    });
+    this.physics.add.overlap(this.player.sprite, sp, () => {
+      if (enemy.alive) this._killPlayer();
+    });
+  }
+
+  _registerEnemyE(enemy) {
+    const sp = enemy.sprite;
+    this._ensureTargetId(sp, 'enemyE');
+
+    this.physics.add.overlap(this.normalBullets, sp, (_sp, bullet) => {
       this._handlePlayerBulletHit(bullet, enemy, sp);
     });
     this.physics.add.overlap(this.missileBullets, sp, (_sp, bullet) => {
@@ -423,6 +450,11 @@ export class GameScene extends Phaser.Scene {
       this._spawnBoss();
     }
 
+    // ── EnemyE Flanker waves ──────────────────────────────────────────────────
+    if (t >= 3000  && !this._wavesTriggered.has(11)) { this._wavesTriggered.add(11); this._spawnEnemyE(2); }
+    if (t >= 7000  && !this._wavesTriggered.has(12)) { this._wavesTriggered.add(12); this._spawnEnemyE(3); }
+    if (t >= 13000 && !this._wavesTriggered.has(13)) { this._wavesTriggered.add(13); this._spawnEnemyE(4); }
+
     // ── EnemyD Carrier waves (before boss) ───────────────────────────────────
     if (t >= 500   && !this._wavesTriggered.has(8)) {
       this._wavesTriggered.add(8);
@@ -514,15 +546,30 @@ export class GameScene extends Phaser.Scene {
     const W = this._W, H = this._H;
     for (let i = 0; i < count; i++) {
       const y = Phaser.Math.Between(80, H - 80);
+      const variantIndex = this._powerUpTypeIndex;
       const dropType = this._nextPowerUpType();
       const e = new EnemyD(this, W + 60, y, (ex, ey) => {
         this._spawnPowerUp(ex, ey, dropType);
-      });
+      }, variantIndex);
       e.scoreValue = 300;
       e.enemyBullets = this.enemyBullets;
       e._player = this.player;
       this.enemiesD.push(e);
       this._registerEnemyD(e);
+    }
+  }
+
+  _spawnEnemyE(count) {
+    const W = this._W, H = this._H;
+    for (let i = 0; i < count; i++) {
+      // Alternate spawning from top and bottom edges
+      const fromTop = i % 2 === 0;
+      const y = fromTop ? Phaser.Math.Between(40, H * 0.3) : Phaser.Math.Between(H * 0.7, H - 40);
+      const e = new EnemyE(this, W + 40 + i * 30, y);
+      e.enemyBullets = this.enemyBullets;
+      e._player = this.player;
+      this.enemiesE.push(e);
+      this._registerEnemyE(e);
     }
   }
 
@@ -577,19 +624,143 @@ export class GameScene extends Phaser.Scene {
     this._gameOver = true;
     this.player.die();
     this.time.delayedCall(600, () => {
-      this.game.events.emit('chargeUpdate', 0);
       this.scene.stop('UIScene');
       this.scene.start('GameOverScene', { score: this._score });
     });
   }
 
-  _onBossDefeated() {
+  _onBossDying(bossSprite) {
     if (this._gameOver) return;
     this._gameOver = true;
-    this._addScore(1000); // Boss kill bonus
-    this.time.delayedCall(800, () => {
-      this.scene.stop('UIScene');
-      this.scene.start('WinScene', { score: this._score });
+    this._addScore(1000);
+
+    // Clear all active bullets so the screen goes quiet
+    [this.normalBullets, this.enemyBullets, this.spreadBullets, this.aimedBullets, this.missileBullets]
+      .forEach(g => g.getChildren().forEach(b => this._recycleBullet(b)));
+
+    // Freeze player input / movement
+    this.player.alive = false;
+
+    const W = this._W, H = this._H;
+    const bx = bossSprite.x;
+    const by = bossSprite.y;
+
+    // ── Phase 1: Staggered explosions across the boss body (0–2.2 s) ──────────
+    // Spread hit points relative to boss center covering the whole sprite area
+    const hitPoints = [
+      { dx:   0, dy:   0 },   // center
+      { dx: -130, dy: -60 },  // top-left
+      { dx:  130, dy: -80 },  // top-right
+      { dx: -160, dy:  30 },  // cannon arm
+      { dx:   80, dy:  80 },  // lower body
+      { dx: -60,  dy: -120 }, // head
+      { dx:  180, dy:  40 },  // right wing
+      { dx: -100, dy: 100 },  // lower-left
+      { dx:  60,  dy: -40 },  // cockpit
+      { dx:  140, dy: -100 }, // top-right corner
+    ];
+
+    hitPoints.forEach((pt, i) => {
+      this.time.delayedCall(i * 220, () => {
+        if (!this.scene.isActive()) return;
+        const ex = bx + pt.dx;
+        const ey = by + pt.dy;
+
+        // Spritesheet explosion (medium size, arcade feel)
+        const sz = Phaser.Math.Between(80, 140);
+        if (this.textures.exists('explode')) {
+          const anim = this.add.sprite(ex, ey, 'explode', 0)
+            .setDisplaySize(sz, sz)
+            .setDepth(16)
+            .setOrigin(0.5, 0.5);
+          anim.play('explode');
+          anim.once('animationcomplete', () => anim.destroy());
+        }
+
+        // Screen shake on the first few hits for impact
+        if (i < 4) {
+          this.cameras.main.shake(180, 0.010 - i * 0.002);
+        }
+
+        // Flash the boss sprite white then back for each hit
+        if (bossSprite && bossSprite.active) {
+          bossSprite.setTintFill(0xffffff);
+          this.time.delayedCall(80, () => {
+            if (bossSprite && bossSprite.active) bossSprite.clearTint();
+          });
+        }
+      });
+    });
+
+    // ── Phase 2: Boss sprite fades out (starts at 2.0 s) ─────────────────────
+    this.time.delayedCall(2000, () => {
+      if (!this.scene.isActive()) return;
+      this.tweens.add({
+        targets: bossSprite,
+        alpha: 0,
+        duration: 700,
+        ease: 'Power2',
+        onComplete: () => {
+          if (bossSprite) bossSprite.setVisible(false);
+        },
+      });
+      // One final big explosion on fadeout
+      if (this.textures.exists('explode')) {
+        const finale = this.add.sprite(bx, by, 'explode', 0)
+          .setDisplaySize(220, 220)
+          .setDepth(17)
+          .setOrigin(0.5, 0.5);
+        finale.play('explode');
+        finale.once('animationcomplete', () => finale.destroy());
+      }
+      this.cameras.main.shake(400, 0.018);
+    });
+
+    // ── Phase 3: Player victory flyby (starts at 2.9 s) ──────────────────────
+    this.time.delayedCall(2900, () => {
+      if (!this.scene.isActive()) return;
+      const playerSprite = this.player.sprite;
+
+      // Park player at left edge, vertically centered, invisible
+      playerSprite.setActive(true).setVisible(true);
+      playerSprite.setAlpha(0);
+      playerSprite.x = -80;
+      playerSprite.y = H / 2;
+      if (playerSprite.body) {
+        playerSprite.body.setVelocity(0, 0);
+        playerSprite.body.setEnable(false);
+      }
+
+      // Fade in then fly across
+      this.tweens.add({
+        targets: playerSprite,
+        alpha: 1,
+        duration: 200,
+        ease: 'Linear',
+        onComplete: () => {
+          // Use 'spaceship-default' texture for clean look
+          if (this.textures.exists('spaceship-default')) {
+            playerSprite.setTexture('spaceship-default');
+          }
+          this.tweens.add({
+            targets: playerSprite,
+            x: W + 120,
+            duration: 1400,
+            ease: 'Quad.easeIn',
+          });
+        },
+      });
+    });
+
+    // ── Phase 4: Transition to WinScene (starts at 4.6 s) ────────────────────
+    this.time.delayedCall(4600, () => {
+      if (!this.scene.isActive()) return;
+      // White flash then cut
+      this.cameras.main.flash(400, 255, 255, 255);
+      this.time.delayedCall(400, () => {
+        this.scene.stop('UIScene');
+        this.scene.start('WinScene', { score: this._score });
+      });
     });
   }
 
@@ -639,6 +810,11 @@ export class GameScene extends Phaser.Scene {
       if (e.alive) e.update(time, delta);
     }
 
+    // Enemies E
+    for (const e of this.enemiesE) {
+      if (e.alive) e.update(time, delta);
+    }
+
     // Power-ups
     for (const pu of this.powerUps) {
       if (pu.alive) pu.update(time, delta);
@@ -651,7 +827,6 @@ export class GameScene extends Phaser.Scene {
 
     // Recycle off-screen bullets
     this._cullBullets(this.normalBullets);
-    this._cullBullets(this.chargedBullets);
     this._cullBullets(this.enemyBullets);
     this._cullBullets(this.spreadBullets);
     this._cullBullets(this.aimedBullets);

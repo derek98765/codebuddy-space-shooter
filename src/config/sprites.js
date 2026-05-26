@@ -10,18 +10,20 @@ export const SPRITES = {
     key: 'spaceship-default',
     keyUp: 'spaceship-up',
     keyDown: 'spaceship-down',
-    width: 104,
-    height: 62,
+    width: 125,
+    height: 74,
     color: 0x4488ff,
   },
   bulletNormal: {
-    width: 12,
-    height: 5,
+    key: 'bullet-1',
+    width: 36,
+    height: 15,
     color: 0xffff88,
   },
   bulletCharged: {
-    width: 24,
-    height: 12,
+    key: 'bullet-1',
+    width: 52,
+    height: 22,
     color: 0xff8800,
   },
   bulletEnemy: {
@@ -30,19 +32,22 @@ export const SPRITES = {
     color: 0xff4444,
   },
   enemyA: {
-    width: 83,
-    height: 52,
+    key: 'enemy-1',
+    width: 112,
+    height: 62,
     color: 0xff3333,
   },
   enemyB: {
-    width: 73,
-    height: 57,
+    key: 'enemy-2',
+    width: 77,
+    height: 68,
     color: 0xff8800,
   },
   enemyC: {
-    width: 114,
-    height: 78,
-    color: 0x22aa44,  // green tank
+    key: 'enemy-3',
+    width: 106,
+    height: 94,
+    color: 0x22aa44,
   },
   boss: {
     key: 'boss',
@@ -61,8 +66,19 @@ export const SPRITES = {
     color: 0xff6666,
   },
   enemyD: {
-    width: 120,
-    height: 88,
-    color: 0x6622aa,  // purple carrier
+    variants: [
+      ['carrier-1', 194, 83],
+      ['carrier-2', 165, 83],
+      ['carrier-3', 216, 83],
+    ],
+    width: 192,
+    height: 83,
+    color: 0x6622aa,
+  },
+  enemyE: {
+    key: 'enemy-4',
+    width: 94,
+    height: 97,
+    color: 0xcc2266,
   },
 };

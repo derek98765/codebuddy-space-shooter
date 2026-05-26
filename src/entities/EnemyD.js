@@ -1,5 +1,5 @@
 import { SPRITES } from '../config/sprites.js';
-import { explode } from '../utils/particles.js';
+import { explodeSprite } from '../utils/particles.js';
 
 /**
  * Enemy Type D — Carrier
@@ -16,12 +16,20 @@ export class EnemyD {
    * @param {number} y
    * @param {Function} onDrop  - called with (x, y, powerUpType) when this enemy dies
    */
-  constructor(scene, x, y, onDrop) {
+  constructor(scene, x, y, onDrop, variantIndex = 0) {
     this.scene = scene;
     const cfg = SPRITES.enemyD;
 
-    this._ensureTexture(scene, 'enemyD_tex', cfg.width, cfg.height, cfg.color);
-    this.sprite = scene.physics.add.image(x, y, 'enemyD_tex');
+    const variants = cfg.variants ?? [];
+    const available = variants.filter(([k]) => scene.textures.exists(k));
+    if (available.length > 0) {
+      const [texKey, dw, dh] = available[variantIndex % available.length];
+      this.sprite = scene.physics.add.image(x, y, texKey);
+      this.sprite.setDisplaySize(dw, dh);
+    } else {
+      this._ensureTexture(scene, 'enemyD_tex', cfg.width, cfg.height, cfg.color);
+      this.sprite = scene.physics.add.image(x, y, 'enemyD_tex');
+    }
     this.sprite.setDepth(8);
     this.sprite.setVelocityX(-45); // slower than EnemyC
 
@@ -91,27 +99,25 @@ export class EnemyD {
   }
 
   _fireAtPlayer() {
-    if (!this.scene.textures.exists('bullet_enemy_tex')) {
+    const texKey = this.scene.textures.exists('bullet-2') ? 'bullet-2' : 'bullet_enemy_tex';
+    if (texKey === 'bullet_enemy_tex' && !this.scene.textures.exists(texKey)) {
       const cfg = SPRITES.bulletEnemy;
       const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
-      g.fillStyle(cfg.color, 1);
-      g.fillRect(0, 0, cfg.width, cfg.height);
-      g.generateTexture('bullet_enemy_tex', cfg.width, cfg.height);
-      g.destroy();
+      g.fillStyle(cfg.color, 1); g.fillRect(0, 0, cfg.width, cfg.height);
+      g.generateTexture(texKey, cfg.width, cfg.height); g.destroy();
     }
 
-    const b = this.enemyBullets.get(this.sprite.x, this.sprite.y, 'bullet_enemy_tex');
+    const b = this.enemyBullets.get(this.sprite.x, this.sprite.y, texKey);
     if (!b) return;
-    b.setActive(true).setVisible(true).setDepth(7);
-    b.body.setEnable(true);
-    b.body.reset(this.sprite.x, this.sprite.y);
-
     const angle = Phaser.Math.Angle.Between(
       this.sprite.x, this.sprite.y,
       this._player.x, this._player.y
     );
-    const speed = 145;
-    b.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+    b.setActive(true).setVisible(true).setDepth(7);
+    b.setDisplaySize(22, 22).setRotation(angle);
+    b.body.setEnable(true);
+    b.body.reset(this.sprite.x, this.sprite.y);
+    b.setVelocity(Math.cos(angle) * 145, Math.sin(angle) * 145);
   }
 
   hit(damage = 1) {
@@ -123,7 +129,7 @@ export class EnemyD {
     if (this.hp <= 0) {
       this.alive = false;
       if (this.sprite.body) this.sprite.body.setEnable(false);
-      explode(this.scene, this.sprite.x, this.sprite.y, 0xaa44ff, 20, 1.2);
+      explodeSprite(this.scene, this.sprite.x, this.sprite.y, 130);
       this.sprite.setActive(false).setVisible(false);
       // Drop power-up
       if (this._onDrop) {

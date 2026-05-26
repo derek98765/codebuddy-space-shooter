@@ -25,38 +25,23 @@ export class Player {
     this.sprite.setCollideWorldBounds(true);
     this.sprite.setDepth(10);
 
-    // Charge indicator — small rect in front of the ship
-    this.chargeBar = scene.add.rectangle(
-      x + cfg.width / 2 + 4,
-      y,
-      0, 8,
-      0xff8800
-    ).setDepth(11).setOrigin(0, 0.5);
-
-    // Input — WASD movement, J rapid-fire, K charge shot
+    // Input — WASD movement, J fire
     this.keyW = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
     this.keyA = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
     this.keyS = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S);
     this.keyD = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
     this.keyJ = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.J);
-    this.keyK = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.K);
 
     // Shooting state
     this.fireTimer = 0;
-    this._baseFireRate = 160; // ms between rapid-fire bullets
+    this._baseFireRate = 160;
     this.fireRate = this._baseFireRate;
     this.normalDamage = 1;
-    this.chargedDamage = 2;
-    this.chargeTime = 0;
-    this._baseMaxCharge = 1500;
-    this.maxCharge = this._baseMaxCharge;
-    this.isCharging = false;
 
     this.alive = true;
 
-    // Bullet groups (set from GameScene after creation)
+    // Bullet group (set from GameScene after creation)
     this.normalBullets = null;
-    this.chargedBullets = null;
 
     // ── Power-up state (each is permanent once collected, all can stack) ─────
     this._hasSpread  = false;
@@ -100,7 +85,6 @@ export class Player {
     if (type === 'rapid') {
       this._hasRapid  = true;
       this.fireRate   = this._baseFireRate / 3;
-      this.maxCharge  = this._baseMaxCharge / 2;
     }
     this._emitPowerUpUpdate();
   }
@@ -178,30 +162,6 @@ export class Player {
     } else {
       if (this._laserActive) this._clearLaser();
     }
-
-    // ── Charge shot — K key ────────────────────────────────────────────────
-    if (this.keyK.isDown) {
-      this.isCharging = true;
-      this.chargeTime = Math.min(this.chargeTime + delta, this.maxCharge);
-    }
-
-    if (!this.keyK.isDown && this.isCharging) {
-      this.isCharging = false;
-      if (this.chargedBullets && this.chargeTime > 200) {
-        this._fireCharged();
-      }
-      this.chargeTime = 0;
-    }
-
-    // Update charge indicator
-    const chargeRatio = this.chargeTime / this.maxCharge;
-    const maxBarWidth = 36;
-    const cfg = SPRITES.player;
-    this.chargeBar.width = chargeRatio * maxBarWidth;
-    this.chargeBar.x = sp.x + cfg.width / 2 - 2;
-    this.chargeBar.y = sp.y;
-
-    this.game.events.emit('chargeUpdate', chargeRatio);
   }
 
   // ── Missile mode ───────────────────────────────────────────────────────────
@@ -238,33 +198,35 @@ export class Player {
 
   _launchMissile(ox, oy) {
     const target = this._getNearestEnemy();
-    this._ensureMissileTex();
-    const m = this.missileBullets.get(ox, oy, 'missile_tex');
+    const texKey = this.scene.textures.exists('missile') ? 'missile' : (this._ensureMissileTex(), 'missile_tex');
+    const m = this.missileBullets.get(ox, oy, texKey);
     if (!m) return;
     m.setActive(true).setVisible(true).setDepth(9);
+    m.setDisplaySize(52, 13);
     m.body.setEnable(true);
     m.body.reset(ox, oy);
     m.damage = 2;
     m.piercing = false;
     m.hitTargets = new Set();
-    m._target = target;       // homing target (may be null)
+    m._target = target;
     m._speed = 420;
-    // Initial velocity: straight right if no target, else toward target
+    let angle;
     if (target) {
-      const angle = Phaser.Math.Angle.Between(ox, oy, target.sprite.x, target.sprite.y);
-      m.setVelocity(Math.cos(angle) * m._speed, Math.sin(angle) * m._speed);
+      angle = Phaser.Math.Angle.Between(ox, oy, target.sprite.x, target.sprite.y);
     } else {
-      m.setVelocity(m._speed, 0);
+      angle = 0;
     }
+    m.setRotation(angle);
+    m.setVelocity(Math.cos(angle) * m._speed, Math.sin(angle) * m._speed);
   }
 
   _ensureMissileTex() {
     if (!this.scene.textures.exists('missile_tex')) {
       const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
       g.fillStyle(0xff4400, 1);
-      g.fillRect(0, 2, 14, 4);   // body
+      g.fillRect(0, 2, 14, 4);
       g.fillStyle(0xffdd00, 1);
-      g.fillRect(12, 3, 4, 2);   // nose glow
+      g.fillRect(12, 3, 4, 2);
       g.generateTexture('missile_tex', 16, 8);
       g.destroy();
     }
@@ -290,6 +252,7 @@ export class Player {
       const turn = Phaser.Math.Clamp(diff, -maxTurn, maxTurn);
       const newAngle = currentAngle + turn;
       m.setVelocity(Math.cos(newAngle) * m._speed, Math.sin(newAngle) * m._speed);
+      m.setRotation(newAngle);
     }
   }
 
@@ -304,12 +267,9 @@ export class Player {
 
   _fireBulletAtAngle(angleOffset) {
     const cfg = SPRITES.bulletNormal;
-    this._ensureTexture('bullet_normal_tex', cfg.width, cfg.height, cfg.color);
-    const b = this.normalBullets.get(
-      this.sprite.x + SPRITES.player.width / 2 + 4,
-      this.sprite.y,
-      'bullet_normal_tex'
-    );
+    const texKey = this.scene.textures.exists(cfg.key) ? cfg.key : (this._ensureTexture('bullet_normal_tex', cfg.width, cfg.height, cfg.color), 'bullet_normal_tex');
+    const ox = this.sprite.x + SPRITES.player.width / 2 + 4;
+    const b = this.normalBullets.get(ox, this.sprite.y, texKey);
     if (!b) return;
     b.body.setEnable(false);
     b.charged = false;
@@ -317,7 +277,9 @@ export class Player {
     b.damage = this.normalDamage;
     b.hitTargets = new Set();
     b.setActive(true).setVisible(true).setDepth(9);
-    b.body.reset(this.sprite.x + SPRITES.player.width / 2 + 4, this.sprite.y);
+    b.setDisplaySize(cfg.width, cfg.height);
+    b.setRotation(angleOffset);
+    b.body.reset(ox, this.sprite.y);
     const speed = 600;
     b.setVelocityX(Math.cos(angleOffset) * speed);
     b.setVelocityY(Math.sin(angleOffset) * speed);
@@ -327,12 +289,9 @@ export class Player {
   // ── Normal / charged fire ──────────────────────────────────────────────────
   _fireNormal() {
     const cfg = SPRITES.bulletNormal;
-    this._ensureTexture('bullet_normal_tex', cfg.width, cfg.height, cfg.color);
-    const b = this.normalBullets.get(
-      this.sprite.x + SPRITES.player.width / 2 + 4,
-      this.sprite.y,
-      'bullet_normal_tex'
-    );
+    const texKey = this.scene.textures.exists(cfg.key) ? cfg.key : (this._ensureTexture('bullet_normal_tex', cfg.width, cfg.height, cfg.color), 'bullet_normal_tex');
+    const ox = this.sprite.x + SPRITES.player.width / 2 + 4;
+    const b = this.normalBullets.get(ox, this.sprite.y, texKey);
     if (!b) return;
     b.body.setEnable(false);
     b.charged = false;
@@ -340,29 +299,10 @@ export class Player {
     b.damage = this.normalDamage;
     b.hitTargets = new Set();
     b.setActive(true).setVisible(true).setDepth(9);
-    b.body.reset(this.sprite.x + SPRITES.player.width / 2 + 4, this.sprite.y);
+    b.setDisplaySize(cfg.width, cfg.height);
+    b.setRotation(0);
+    b.body.reset(ox, this.sprite.y);
     b.setVelocityX(600);
-    b.setVelocityY(0);
-    b.body.setEnable(true);
-  }
-
-  _fireCharged() {
-    const cfg = SPRITES.bulletCharged;
-    this._ensureTexture('bullet_charged_tex', cfg.width, cfg.height, cfg.color);
-    const b = this.chargedBullets.get(
-      this.sprite.x + SPRITES.player.width / 2 + 4,
-      this.sprite.y,
-      'bullet_charged_tex'
-    );
-    if (!b) return;
-    b.body.setEnable(false);
-    b.charged = true;
-    b.piercing = true;
-    b.damage = this.chargedDamage;
-    b.hitTargets = new Set();
-    b.setActive(true).setVisible(true).setDepth(9);
-    b.body.reset(this.sprite.x + SPRITES.player.width / 2 + 4, this.sprite.y);
-    b.setVelocityX(480);
     b.setVelocityY(0);
     b.body.setEnable(true);
   }
@@ -385,9 +325,7 @@ export class Player {
     this._hasMissile = false;
     this._hasRapid   = false;
     this.fireRate    = this._baseFireRate;
-    this.maxCharge   = this._baseMaxCharge;
     this.sprite.setActive(false).setVisible(false);
-    this.chargeBar.setVisible(false);
     if (this._engineTrail) {
       this._engineTrail.stop();
     }
@@ -396,7 +334,6 @@ export class Player {
 
   destroy() {
     this._clearLaser();
-    this.chargeBar.destroy();
     this._laserGfx.destroy();
     this.sprite.destroy();
   }

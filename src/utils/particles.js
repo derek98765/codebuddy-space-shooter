@@ -7,6 +7,27 @@
  */
 
 /**
+ * Play the explode spritesheet animation at (x, y) and destroy it when done.
+ * Falls back to the particle burst if the spritesheet isn't loaded.
+ * @param {Phaser.Scene} scene
+ * @param {number} x
+ * @param {number} y
+ * @param {number} [size=96] - display size in pixels (square)
+ */
+export function explodeSprite(scene, x, y, size = 96) {
+  if (!scene.textures.exists('explode')) {
+    explode(scene, x, y, 0xff6600, 16, 1.0);
+    return;
+  }
+  const anim = scene.add.sprite(x, y, 'explode', 0)
+    .setDisplaySize(size, size)
+    .setDepth(16)
+    .setOrigin(0.5, 0.5);
+  anim.play('explode');
+  anim.once('animationcomplete', () => anim.destroy());
+}
+
+/**
  * Fire a one-shot burst of particles at (x, y).
  * @param {Phaser.Scene} scene
  * @param {number} x

@@ -3,6 +3,11 @@ export class WinScene extends Phaser.Scene {
     super({ key: 'WinScene' });
   }
 
+  preload() {
+    this.load.image('play-again-btn', 'assets/play-again-btn.png');
+    this.load.image('you-win', 'assets/you-win.png');
+  }
+
   init(data) {
     this._score = data?.score ?? 0;
   }
@@ -14,52 +19,35 @@ export class WinScene extends Phaser.Scene {
     // Dark overlay
     this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.85).setDepth(0);
 
-    // Glow strip
-    this.add.rectangle(W / 2, H / 2 - 60, W, 120, 0x001122, 0.7).setDepth(1);
-
-    // Title
-    this.add.text(W / 2, H / 2 - 60, 'YOU WIN', {
-      fontSize: '56px',
-      fontFamily: 'monospace',
-      color: '#44ffaa',
-      stroke: '#005533',
-      strokeThickness: 4,
-    }).setOrigin(0.5, 0.5).setDepth(2);
-
-    // Subtitle
-    this.add.text(W / 2, H / 2 + 10, 'The boss has been defeated!', {
-      fontSize: '16px',
-      fontFamily: 'monospace',
-      color: '#88ccaa',
-    }).setOrigin(0.5, 0.5).setDepth(2);
+    // YOU WIN image — 1632×474 source, displayed at 55% screen width
+    const titleW = Math.min(W * 0.55, 600);
+    const titleH = titleW * (474 / 1632);
+    const titleY = H / 2 - 80;
+    this.add.image(W / 2, titleY, 'you-win')
+      .setDisplaySize(titleW, titleH)
+      .setOrigin(0.5, 0.5)
+      .setDepth(2);
 
     // Final score
-    this.add.text(W / 2, H / 2 + 40, 'SCORE  ' + this._score, {
+    this.add.text(W / 2, titleY + titleH / 2 + 24, 'SCORE  ' + this._score, {
       fontSize: '20px',
       fontFamily: 'monospace',
       color: '#44ffaa',
     }).setOrigin(0.5, 0.5).setDepth(2);
 
-    // Restart button
-    const btnBg = this.add.rectangle(W / 2, H / 2 + 90, 180, 44, 0x002211)
-      .setDepth(2).setInteractive({ useHandCursor: true });
-    this.add.rectangle(W / 2, H / 2 + 90, 184, 48, 0x44ffaa, 0)
-      .setDepth(2).setStrokeStyle(2, 0x44ffaa);
-    const btnText = this.add.text(W / 2, H / 2 + 90, '[ PLAY AGAIN ]', {
-      fontSize: '18px',
-      fontFamily: 'monospace',
-      color: '#44ffaa',
-    }).setOrigin(0.5, 0.5).setDepth(3);
+    // Play Again button
+    const btnW = Math.min(W * 0.28, 240);
+    const btnH = btnW * (564 / 1586);
+    const btnY  = titleY + titleH / 2 + 70;
+    const playBtn = this.add.image(W / 2, btnY, 'play-again-btn')
+      .setDisplaySize(btnW, btnH)
+      .setOrigin(0.5, 0.5)
+      .setDepth(3)
+      .setInteractive({ useHandCursor: true });
 
-    btnBg.on('pointerover', () => {
-      btnBg.setFillStyle(0x004422);
-      btnText.setColor('#ffffff');
-    });
-    btnBg.on('pointerout', () => {
-      btnBg.setFillStyle(0x002211);
-      btnText.setColor('#44ffaa');
-    });
-    btnBg.on('pointerdown', () => {
+    playBtn.on('pointerover', () => playBtn.setScale(playBtn.scaleX * 1.08, playBtn.scaleY * 1.08));
+    playBtn.on('pointerout',  () => playBtn.setDisplaySize(btnW, btnH));
+    playBtn.on('pointerdown', () => {
       this.scene.start('StartScene');
       this.scene.stop();
     });
@@ -70,7 +58,7 @@ export class WinScene extends Phaser.Scene {
     this.input.keyboard.once('keydown-ENTER', restart);
 
     // Hint text
-    this.add.text(W / 2, H / 2 + 128, 'or press SPACE / ENTER', {
+    this.add.text(W / 2, btnY + btnH / 2 + 18, 'or press SPACE / ENTER', {
       fontSize: '12px',
       fontFamily: 'monospace',
       color: '#337755',

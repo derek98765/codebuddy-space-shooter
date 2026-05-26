@@ -1,5 +1,5 @@
 import { SPRITES } from '../config/sprites.js';
-import { explode } from '../utils/particles.js';
+import { explodeSprite } from '../utils/particles.js';
 
 /**
  * Enemy Type A — Sniper
@@ -17,8 +17,13 @@ export class EnemyA {
     this.scene = scene;
     const cfg = SPRITES.enemyA;
 
-    this._ensureTexture(scene, 'enemyA_tex', cfg.width, cfg.height, cfg.color);
-    this.sprite = scene.physics.add.image(x, y, 'enemyA_tex');
+    if (scene.textures.exists(cfg.key)) {
+      this.sprite = scene.physics.add.image(x, y, cfg.key);
+      this.sprite.setDisplaySize(cfg.width, cfg.height);
+    } else {
+      this._ensureTexture(scene, 'enemyA_tex', cfg.width, cfg.height, cfg.color);
+      this.sprite = scene.physics.add.image(x, y, 'enemyA_tex');
+    }
     this.sprite.setDepth(8);
     this.sprite.setVelocityX(-90);
 
@@ -76,13 +81,12 @@ export class EnemyA {
   }
 
   _fireAtPlayer() {
-    const cfg = SPRITES.bulletEnemy;
-    if (!this.scene.textures.exists('bullet_enemy_tex')) {
+    const texKey = this.scene.textures.exists('bullet-2') ? 'bullet-2' : 'bullet_enemy_tex';
+    if (texKey === 'bullet_enemy_tex' && !this.scene.textures.exists(texKey)) {
+      const cfg = SPRITES.bulletEnemy;
       const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
-      g.fillStyle(cfg.color, 1);
-      g.fillRect(0, 0, cfg.width, cfg.height);
-      g.generateTexture('bullet_enemy_tex', cfg.width, cfg.height);
-      g.destroy();
+      g.fillStyle(cfg.color, 1); g.fillRect(0, 0, cfg.width, cfg.height);
+      g.generateTexture(texKey, cfg.width, cfg.height); g.destroy();
     }
 
     const speed = this._bulletSpeed ?? 160;
@@ -94,9 +98,10 @@ export class EnemyA {
     }
 
     for (const angle of angles) {
-      const b = this.enemyBullets.get(this.sprite.x, this.sprite.y, 'bullet_enemy_tex');
+      const b = this.enemyBullets.get(this.sprite.x, this.sprite.y, texKey);
       if (!b) continue;
       b.setActive(true).setVisible(true).setDepth(7);
+      b.setDisplaySize(22, 22).setRotation(angle);
       b.body.setEnable(true);
       b.body.reset(this.sprite.x, this.sprite.y);
       b.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
@@ -126,7 +131,7 @@ export class EnemyA {
     if (this.hp <= 0) {
       this.alive = false;
       if (this.sprite.body) this.sprite.body.setEnable(false);
-      explode(this.scene, this.sprite.x, this.sprite.y, 0xff3333, 14, 0.9);
+      explodeSprite(this.scene, this.sprite.x, this.sprite.y, 100);
       this.sprite.setActive(false).setVisible(false);
     }
   }

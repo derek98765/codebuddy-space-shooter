@@ -22,36 +22,16 @@ export class UIScene extends Phaser.Scene {
       color: '#ffffff',
     }).setDepth(22);
 
-    // ── Charge Bar ────────────────────────────────────────────────────────────
-    const chargeBarX = 20;
-    const chargeBarY = H - 28;
-    const chargeBarMaxW = 140;
-    const chargeBarH = 14;
-
-    this.add.rectangle(chargeBarX + chargeBarMaxW / 2, chargeBarY, chargeBarMaxW + 4, chargeBarH + 4, 0x000000)
-      .setOrigin(0.5, 0.5).setDepth(20);
-    this.add.rectangle(chargeBarX + chargeBarMaxW / 2, chargeBarY, chargeBarMaxW, chargeBarH, 0x222244)
-      .setOrigin(0.5, 0.5).setDepth(21);
-
-    this._chargeBarFill = this.add.rectangle(chargeBarX, chargeBarY, 0, chargeBarH, 0xff8800)
-      .setOrigin(0, 0.5).setDepth(22);
-
-    this.add.text(chargeBarX, chargeBarY - 14, 'CHARGE', {
-      fontSize: '10px',
-      fontFamily: 'monospace',
-      color: '#aaaacc',
-    }).setDepth(22);
-
-    this._chargeBarMaxW = chargeBarMaxW;
-
-    // ── Power-up HUD (above charge bar) ──────────────────────────────────────
-    this._powerUpLabel = this.add.text(chargeBarX, chargeBarY - 46, '', {
+    // ── Power-up HUD (bottom-left) ────────────────────────────────────────────
+    const hudX = 20;
+    const hudY = H - 28;
+    this._powerUpLabel = this.add.text(hudX, hudY, '', {
       fontSize: '11px',
       fontFamily: 'monospace',
       color: '#00eeff',
     }).setDepth(22).setVisible(false);
 
-    this._powerUpTimer = this.add.text(chargeBarX + 90, chargeBarY - 46, '', {
+    this._powerUpTimer = this.add.text(hudX + 90, hudY, '', {
       fontSize: '11px',
       fontFamily: 'monospace',
       color: '#aaffff',
@@ -87,14 +67,12 @@ export class UIScene extends Phaser.Scene {
     this._bossBarX = bossBarX;
 
     // ── Event listeners ───────────────────────────────────────────────────────
-    this.game.events.on('chargeUpdate', this._onChargeUpdate, this);
     this.game.events.on('bossEntered', this._onBossEntered, this);
     this.game.events.on('bossHpUpdate', this._onBossHpUpdate, this);
     this.game.events.on('scoreUpdate', this._onScoreUpdate, this);
     this.game.events.on('powerUpUpdate', this._onPowerUpUpdate, this);
 
     this.events.once('shutdown', () => {
-      this.game.events.off('chargeUpdate', this._onChargeUpdate, this);
       this.game.events.off('bossEntered', this._onBossEntered, this);
       this.game.events.off('bossHpUpdate', this._onBossHpUpdate, this);
       this.game.events.off('scoreUpdate', this._onScoreUpdate, this);
@@ -122,15 +100,6 @@ export class UIScene extends Phaser.Scene {
     this._powerUpLabel.setColor(color);
     this._powerUpLabel.setVisible(true);
     this._powerUpTimer.setVisible(false);
-  }
-
-  _onChargeUpdate(ratio) {
-    this._chargeBarFill.width = ratio * this._chargeBarMaxW;
-    const t = Math.min(ratio, 1);
-    const r = 255;
-    const g = Math.floor(Phaser.Math.Linear(136, 255, t));
-    const b = Math.floor(Phaser.Math.Linear(0, 100, t));
-    this._chargeBarFill.setFillStyle(Phaser.Display.Color.GetColor(r, g, b));
   }
 
   _onBossEntered(hp, maxHp) {

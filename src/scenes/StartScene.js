@@ -7,6 +7,9 @@ export class StartScene extends Phaser.Scene {
     this.load.image('sky-background',    'assets/sky-background.png');
     this.load.image('clouds-foreground', 'assets/clouds-foreground.png');
     this.load.image('logo',              'assets/logo.png');
+    this.load.image('play-now-btn',      'assets/play-now-btn.png');
+    this.load.image('key-wasd',          'assets/key-wasd.png');
+    this.load.image('key-j',             'assets/key-j.png');
   }
 
   create() {
@@ -40,48 +43,62 @@ export class StartScene extends Phaser.Scene {
       .setDepth(2);
 
     // ── Logo ──────────────────────────────────────────────────────────────────
-    const logoW = Math.min(W * 0.5, 600);
+    const logoW = Math.min(W * 0.5, 690);
     const logoH = logoW * (668 / 1536);
     this.add.image(W / 2, H / 2 - 130, 'logo')
       .setDisplaySize(logoW, logoH)
       .setOrigin(0.5, 0.5)
       .setDepth(10);
 
-    // ── Subtitle ──────────────────────────────────────────────────────────────
-    this.add.text(W / 2, H / 2 - 130 + logoH / 2 + 24, 'Survive the onslaught. Defeat the boss.', {
-      fontSize: '16px',
-      fontFamily: 'monospace',
-      color: '#ffffff',
-      stroke: '#000000',
-      strokeThickness: 4,
-    }).setOrigin(0.5, 0.5).setDepth(10);
+    const logoBottom = H / 2 - 130 + logoH / 2;
 
-    // ── Start prompt (blinking) ───────────────────────────────────────────────
-    const prompt = this.add.text(W / 2, H / 2 + 60, '[ PRESS ENTER OR CLICK TO START ]', {
-      fontSize: '20px',
-      fontFamily: 'monospace',
-      color: '#ffffff',
-      stroke: '#000000',
-      strokeThickness: 4,
-    }).setOrigin(0.5, 0.5).setDepth(10);
+    // ── Control key images ────────────────────────────────────────────────────
+    const keyH = 56;
+    const wasdW = keyH * (1149 / 315);
+    const jW    = keyH * (285  / 315);
+    const gap   = 48;
+    const totalW = wasdW + gap + jW;
+    const keysX  = W / 2 - totalW / 2;
+    const keysY  = logoBottom + 68;
 
-    this.tweens.add({
-      targets: prompt,
-      alpha: 0,
-      duration: 600,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
+    this.add.image(keysX + wasdW / 2, keysY, 'key-wasd')
+      .setDisplaySize(wasdW, keyH).setOrigin(0.5, 0.5).setDepth(10);
+    this.add.text(keysX + wasdW / 2, keysY - keyH / 2 - 14, 'MOVE', {
+      fontSize: '18px', fontFamily: 'monospace', color: '#ffffff',
+      stroke: '#000000', strokeThickness: 3,
+    }).setOrigin(0.5, 1).setDepth(10);
+
+    this.add.image(keysX + wasdW + gap + jW / 2, keysY, 'key-j')
+      .setDisplaySize(jW, keyH).setOrigin(0.5, 0.5).setDepth(10);
+    this.add.text(keysX + wasdW + gap + jW / 2, keysY - keyH / 2 - 14, 'FIRE', {
+      fontSize: '18px', fontFamily: 'monospace', color: '#ffffff',
+      stroke: '#000000', strokeThickness: 3,
+    }).setOrigin(0.5, 1).setDepth(10);
+
+    // ── Play Now button ───────────────────────────────────────────────────────
+    const btnW = Math.min(W * 0.28, 240) * 1.25;
+    const btnH = btnW * (567 / 1568);
+    const btnX  = W / 2;
+    const btnY  = logoBottom + 196;
+
+    const playBtn = this.add.image(btnX, btnY, 'play-now-btn')
+      .setDisplaySize(btnW, btnH)
+      .setOrigin(0.5, 0.5)
+      .setDepth(10)
+      .setInteractive({ useHandCursor: true });
+
+    // Phaser FX glow — starts at 0 strength, animates on hover
+    const glow = playBtn.preFX.addGlow(0xffd966, 0, 0, false, 0.1, 16);
+
+    playBtn.on('pointerover', () => {
+      playBtn.setDisplaySize(btnW * 1.05, btnH * 1.05);
+      this.tweens.add({ targets: glow, outerStrength: 10, duration: 150, ease: 'Power2' });
     });
-
-    // ── Controls hint ─────────────────────────────────────────────────────────
-    this.add.text(W / 2, H / 2 + 130, 'WASD / Arrow Keys — Move      Z — Fire      X — Charged Shot', {
-      fontSize: '13px',
-      fontFamily: 'monospace',
-      color: '#ccddee',
-      stroke: '#000000',
-      strokeThickness: 3,
-    }).setOrigin(0.5, 0.5).setDepth(10);
+    playBtn.on('pointerout', () => {
+      playBtn.setDisplaySize(btnW, btnH);
+      this.tweens.add({ targets: glow, outerStrength: 0, duration: 200, ease: 'Power1' });
+    });
+    playBtn.on('pointerdown', () => this._startGame());
 
     // ── Input: keyboard ───────────────────────────────────────────────────────
     this.input.keyboard.once('keydown-ENTER', () => this._startGame());
