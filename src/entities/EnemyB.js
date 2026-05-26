@@ -1,4 +1,5 @@
 import { SPRITES } from '../config/sprites.js';
+import { explode } from '../utils/particles.js';
 
 /**
  * Enemy Type B — Kamikaze
@@ -58,7 +59,7 @@ export class EnemyB {
         this.sprite.x, this.sprite.y,
         this._player.x, this._player.y
       );
-      if (dist <= 200) {
+      if (dist <= (this._diveRange ?? 200)) {
         this.diving = true;
         const angle = Phaser.Math.Angle.Between(
           this.sprite.x, this.sprite.y,
@@ -73,9 +74,17 @@ export class EnemyB {
     }
   }
 
+  /**
+   * level 1 = reduce kamikaze dive trigger range from 200 → 150 px
+   */
+  scaleDifficulty(level) {
+    if (level >= 1) {
+      this._diveRange = 150;
+    }
+  }
+
   hit(damage = 1) {
     if (!this.alive) return;
-    console.log(`[EnemyB] hit(${damage}) — hp before=${this.hp}`);
     this.hp -= damage;
     this.scene.tweens.add({
       targets: this.sprite,
@@ -87,6 +96,7 @@ export class EnemyB {
     if (this.hp <= 0) {
       this.alive = false;
       if (this.sprite.body) this.sprite.body.setEnable(false);
+      explode(this.scene, this.sprite.x, this.sprite.y, 0xff8800, 14, 0.85);
       this.sprite.setActive(false).setVisible(false);
     }
   }

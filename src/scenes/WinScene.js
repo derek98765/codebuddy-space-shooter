@@ -3,6 +3,10 @@ export class WinScene extends Phaser.Scene {
     super({ key: 'WinScene' });
   }
 
+  init(data) {
+    this._score = data?.score ?? 0;
+  }
+
   create() {
     const W = this.scale.width;
     const H = this.scale.height;
@@ -29,12 +33,19 @@ export class WinScene extends Phaser.Scene {
       color: '#88ccaa',
     }).setOrigin(0.5, 0.5).setDepth(2);
 
+    // Final score
+    this.add.text(W / 2, H / 2 + 40, 'SCORE  ' + this._score, {
+      fontSize: '20px',
+      fontFamily: 'monospace',
+      color: '#44ffaa',
+    }).setOrigin(0.5, 0.5).setDepth(2);
+
     // Restart button
-    const btnBg = this.add.rectangle(W / 2, H / 2 + 80, 180, 44, 0x002211)
+    const btnBg = this.add.rectangle(W / 2, H / 2 + 90, 180, 44, 0x002211)
       .setDepth(2).setInteractive({ useHandCursor: true });
-    this.add.rectangle(W / 2, H / 2 + 80, 184, 48, 0x44ffaa, 0)
+    this.add.rectangle(W / 2, H / 2 + 90, 184, 48, 0x44ffaa, 0)
       .setDepth(2).setStrokeStyle(2, 0x44ffaa);
-    const btnText = this.add.text(W / 2, H / 2 + 80, '[ PLAY AGAIN ]', {
+    const btnText = this.add.text(W / 2, H / 2 + 90, '[ PLAY AGAIN ]', {
       fontSize: '18px',
       fontFamily: 'monospace',
       color: '#44ffaa',

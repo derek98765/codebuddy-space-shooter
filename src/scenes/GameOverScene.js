@@ -3,6 +3,10 @@ export class GameOverScene extends Phaser.Scene {
     super({ key: 'GameOverScene' });
   }
 
+  init(data) {
+    this._score = data?.score ?? 0;
+  }
+
   create() {
     const W = this.scale.width;
     const H = this.scale.height;
@@ -29,12 +33,19 @@ export class GameOverScene extends Phaser.Scene {
       color: '#cc8888',
     }).setOrigin(0.5, 0.5).setDepth(2);
 
+    // Final score
+    this.add.text(W / 2, H / 2 + 40, 'SCORE  ' + this._score, {
+      fontSize: '20px',
+      fontFamily: 'monospace',
+      color: '#ff8888',
+    }).setOrigin(0.5, 0.5).setDepth(2);
+
     // Restart button
-    const btnBg = this.add.rectangle(W / 2, H / 2 + 80, 180, 44, 0x330000)
+    const btnBg = this.add.rectangle(W / 2, H / 2 + 90, 180, 44, 0x330000)
       .setDepth(2).setInteractive({ useHandCursor: true });
-    const btnBorder = this.add.rectangle(W / 2, H / 2 + 80, 184, 48, 0xff3333, 0)
+    const btnBorder = this.add.rectangle(W / 2, H / 2 + 90, 184, 48, 0xff3333, 0)
       .setDepth(2).setStrokeStyle(2, 0xff3333);
-    const btnText = this.add.text(W / 2, H / 2 + 80, '[ RESTART ]', {
+    const btnText = this.add.text(W / 2, H / 2 + 90, '[ RESTART ]', {
       fontSize: '18px',
       fontFamily: 'monospace',
       color: '#ff3333',

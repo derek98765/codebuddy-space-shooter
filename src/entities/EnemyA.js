@@ -1,4 +1,5 @@
 import { SPRITES } from '../config/sprites.js';
+import { explode } from '../utils/particles.js';
 
 /**
  * Enemy Type A — Sniper
@@ -84,23 +85,40 @@ export class EnemyA {
       g.destroy();
     }
 
-    const b = this.enemyBullets.get(this.sprite.x, this.sprite.y, 'bullet_enemy_tex');
-    if (!b) return;
-    b.setActive(true).setVisible(true).setDepth(7);
-    b.body.setEnable(true);
-    b.body.reset(this.sprite.x, this.sprite.y);
+    const speed = this._bulletSpeed ?? 160;
+    const angles = [
+      Phaser.Math.Angle.Between(this.sprite.x, this.sprite.y, this._player.x, this._player.y)
+    ];
+    if (this._dualAim) {
+      angles.push(angles[0] + Phaser.Math.DegToRad(20));
+    }
 
-    const angle = Phaser.Math.Angle.Between(
-      this.sprite.x, this.sprite.y,
-      this._player.x, this._player.y
-    );
-    const speed = 160;
-    b.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+    for (const angle of angles) {
+      const b = this.enemyBullets.get(this.sprite.x, this.sprite.y, 'bullet_enemy_tex');
+      if (!b) continue;
+      b.setActive(true).setVisible(true).setDepth(7);
+      b.body.setEnable(true);
+      b.body.reset(this.sprite.x, this.sprite.y);
+      b.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+    }
+  }
+
+  /**
+   * Called by GameScene to ramp up this enemy's difficulty.
+   * level 1 = bullet speed +20%
+   * level 2 = dual aim (fires at player from 2 angles)
+   */
+  scaleDifficulty(level) {
+    if (level >= 1) {
+      this._bulletSpeed = (this._bulletSpeed ?? 160) * 1.2;
+    }
+    if (level >= 2) {
+      this._dualAim = true;
+    }
   }
 
   hit(damage = 1) {
     if (!this.alive) return;
-    console.log(`[EnemyA] hit(${damage}) — hp before=${this.hp}`);
     this.hp -= damage;
     // Flash white on hit
     this.scene.tweens.add({
@@ -113,6 +131,7 @@ export class EnemyA {
     if (this.hp <= 0) {
       this.alive = false;
       if (this.sprite.body) this.sprite.body.setEnable(false);
+      explode(this.scene, this.sprite.x, this.sprite.y, 0xff3333, 14, 0.9);
       this.sprite.setActive(false).setVisible(false);
     }
   }

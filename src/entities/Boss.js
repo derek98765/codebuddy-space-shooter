@@ -1,8 +1,17 @@
 import { SPRITES } from '../config/sprites.js';
+import { bossExplosion } from '../utils/particles.js';
 
 /**
- * Boss — single phase, 3-cycle attack behaviors
- * HP = 20 (normal bullet = 1 hit, charged bullet = 5 hits)
+ * Boss — 4-pattern ranged-only attack cycle
+ *
+ * Patterns (cycle 0→3, repeat):
+ *   0  Spread Fan   — wide fan of projectiles
+ *   1  Aimed Burst  — rapid successive aimed shots at the player
+ *   2  Ring Shot    — full 360° ring of bullets
+ *   3  Laser Barrage — tight cluster of fast beams aimed at player
+ *
+ * Phase 2 (≤50% HP): all counts increase, interval drops, visual tint changes.
+ * No melee / lunge — purely ranged.
  */
 export class Boss {
   /**
@@ -15,7 +24,8 @@ export class Boss {
     const cfg = SPRITES.boss;
 
     this._ensureTexture(scene, 'boss_tex', cfg.width, cfg.height, cfg.color);
-    // Accent stripe
+
+    // Accent stripe texture
     if (!scene.textures.exists('boss_accent_tex')) {
       const g = scene.make.graphics({ x: 0, y: 0, add: false });
       g.fillStyle(0x4444aa, 1);
@@ -32,23 +42,38 @@ export class Boss {
     this.sprite.body.moves = false;
     this.sprite.body.setAllowGravity(false);
 
-    this.hp = 20;
-    this.maxHp = 20;
+    this.hp    = 60;
+    this.maxHp = 60;
     this.alive = true;
-    this.behaviorIndex = 0; // 0=spread, 1=aimed, 2=lunge
-    this.behaviorTimer = 99999; // large sentinel — entrance tween will set the real value
-    this.behaviorInterval = 2800; // ms between behaviors
-    this.lunging = false;
+
+    this.behaviorIndex    = 0;     // cycles 0–3
+    this.behaviorTimer    = 99999; // entrance tween sets the real first delay
+    this.behaviorInterval = 2000;  // ms between attacks (Phase 1)
+
+    this._enraged = false;
+
     this.homeX = x;
     this.homeY = y;
 
-    this._player = null;       // set from GameScene
+    this._player       = null; // set from GameScene
     this.spreadBullets = null; // set from GameScene
-    this.aimedBullets = null;  // set from GameScene
+    this.aimedBullets  = null; // set from GameScene
 
     // Idle bob
     this.bobOffset = 0;
-    this.bobSpeed = 1.2;
+    this.bobSpeed  = 1.2;
+
+    // Aimed burst sub-state
+    this._burstActive  = false;
+    this._burstRemain  = 0;
+    this._burstTimer   = 0;
+    this._burstInterval = 180; // ms between individual burst shots
+
+    // Laser barrage sub-state
+    this._laserActive   = false;
+    this._laserRemain   = 0;
+    this._laserTimer    = 0;
+    this._laserInterval = 120; // ms between individual laser shots
   }
 
   _ensureTexture(scene, key, w, h, color) {
@@ -73,48 +98,84 @@ export class Boss {
   update(time, delta) {
     if (!this.alive) return;
 
-    // Idle vertical bob (when not lunging)
-    if (!this.lunging) {
-      this.bobOffset += delta / 1000 * this.bobSpeed;
-      this.sprite.y = this.homeY + Math.sin(this.bobOffset) * 18;
-      this._syncBody();
-    }
+    // Idle vertical bob
+    this.bobOffset += delta / 1000 * this.bobSpeed;
+    this.sprite.y = this.homeY + Math.sin(this.bobOffset) * 18;
+    this._syncBody();
 
-    this.behaviorTimer -= delta;
-    if (this.behaviorTimer <= 0) {
-      this._executeBehavior();
-      this.behaviorIndex = (this.behaviorIndex + 1) % 3;
-      this.behaviorTimer = this.behaviorInterval;
+    // Tick sub-state timers for multi-shot patterns
+    this._tickBurst(delta);
+    this._tickLaser(delta);
+
+    // Main pattern timer — only advance when no sub-state is running
+    if (!this._burstActive && !this._laserActive) {
+      this.behaviorTimer -= delta;
+      if (this.behaviorTimer <= 0) {
+        this._executeBehavior();
+        this.behaviorIndex    = (this.behaviorIndex + 1) % 4;
+        this.behaviorTimer    = this.behaviorInterval;
+      }
     }
   }
 
+  // ── Pattern dispatcher ──────────────────────────────────────────────────────
   _executeBehavior() {
     switch (this.behaviorIndex) {
-      case 0: this._spreadShot(); break;
-      case 1: this._aimedShot(); break;
-      case 2: this._lunge(); break;
+      case 0: this._spreadFan();    break;
+      case 1: this._startAimedBurst(); break;
+      case 2: this._ringShot();     break;
+      case 3: this._startLaserBarrage(); break;
     }
   }
 
-  _spreadShot() {
+  // ── Pattern 0: Spread Fan ───────────────────────────────────────────────────
+  // Fires a wide arc of projectiles toward the player's side.
+  _spreadFan() {
     if (!this.spreadBullets) return;
     const cfg = SPRITES.bossBulletSpread;
     this._ensureBulletTex('boss_spread_tex', cfg.width, cfg.height, cfg.color);
 
-    const angles = [-30, -15, 0, 15, 30]; // degrees, firing left
-    angles.forEach(deg => {
+    const count    = this._enraged ? 7 : 4;
+    const halfSpan = this._enraged ? 40 : 35; // degrees
+    const speed    = this._enraged ? 300 : 260;
+
+    for (let i = 0; i < count; i++) {
+      const deg = -halfSpan + (i / (count - 1)) * (halfSpan * 2);
       const rad = Phaser.Math.DegToRad(180 + deg);
       const b = this.spreadBullets.get(this.sprite.x, this.sprite.y, 'boss_spread_tex');
-      if (!b) return;
+      if (!b) continue;
       b.setActive(true).setVisible(true).setDepth(7);
       b.body.setEnable(true);
       b.body.reset(this.sprite.x, this.sprite.y);
-      const speed = 200;
       b.setVelocity(Math.cos(rad) * speed, Math.sin(rad) * speed);
-    });
+    }
   }
 
-  _aimedShot() {
+  // ── Pattern 1: Aimed Burst ──────────────────────────────────────────────────
+  // Fires several aimed shots in rapid succession toward the player.
+  _startAimedBurst() {
+    if (!this.aimedBullets || !this._player || !this._player.alive) return;
+    this._burstActive   = true;
+    this._burstRemain   = this._enraged ? 5 : 3;
+    this._burstTimer    = 0; // fire first shot immediately
+  }
+
+  _tickBurst(delta) {
+    if (!this._burstActive) return;
+    this._burstTimer -= delta;
+    if (this._burstTimer <= 0) {
+      this._fireSingleAimed();
+      this._burstRemain--;
+      if (this._burstRemain <= 0) {
+        this._burstActive = false;
+        this.behaviorTimer = this.behaviorInterval; // reset main timer after burst
+      } else {
+        this._burstTimer = this._burstInterval;
+      }
+    }
+  }
+
+  _fireSingleAimed() {
     if (!this.aimedBullets || !this._player || !this._player.alive) return;
     const cfg = SPRITES.bossBulletAimed;
     this._ensureBulletTex('boss_aimed_tex', cfg.width, cfg.height, cfg.color);
@@ -128,44 +189,102 @@ export class Boss {
     b.setActive(true).setVisible(true).setDepth(7);
     b.body.setEnable(true);
     b.body.reset(this.sprite.x, this.sprite.y);
-    const speed = 180;
+    const speed = this._enraged ? 300 : 240;
     b.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
   }
 
-  _lunge() {
-    if (!this._player || this.lunging) return;
-    this.lunging = true;
-    const targetX = this._player.x + 60;
-    const targetY = this._player.y;
+  // ── Pattern 2: Ring Shot ────────────────────────────────────────────────────
+  // Fires a full 360° ring of equally-spaced bullets.
+  _ringShot() {
+    if (!this.spreadBullets) return;
+    const cfg = SPRITES.bossBulletSpread;
+    this._ensureBulletTex('boss_spread_tex', cfg.width, cfg.height, cfg.color);
 
-    this.scene.tweens.add({
-      targets: this.sprite,
-      x: targetX,
-      y: targetY,
-      duration: 380,
-      ease: 'Power2',
-      onUpdate: () => {
-        this._syncBody();
-      },
-      onComplete: () => {
-        this.scene.tweens.add({
-          targets: this.sprite,
-          x: this.homeX,
-          y: this.homeY,
-          duration: 520,
-          ease: 'Power1',
-          onUpdate: () => {
-            this._syncBody();
-          },
-          onComplete: () => {
-            this.lunging = false;
-            this._syncBody();
-          }
-        });
-      }
-    });
+    const count = this._enraged ? 16 : 12;
+    const speed = this._enraged ? 220 : 180;
+
+    for (let i = 0; i < count; i++) {
+      const rad = Phaser.Math.DegToRad((360 / count) * i);
+      const b = this.spreadBullets.get(this.sprite.x, this.sprite.y, 'boss_spread_tex');
+      if (!b) continue;
+      b.setActive(true).setVisible(true).setDepth(7);
+      b.body.setEnable(true);
+      b.body.reset(this.sprite.x, this.sprite.y);
+      b.setVelocity(Math.cos(rad) * speed, Math.sin(rad) * speed);
+    }
   }
 
+  // ── Pattern 3: Laser Barrage ────────────────────────────────────────────────
+  // Fires a rapid sequence of fast, narrow beams tightly aimed at the player.
+  // Each beam tracks the player's position at the moment it fires (predictive).
+  _startLaserBarrage() {
+    if (!this.aimedBullets || !this._player || !this._player.alive) return;
+    this._laserActive  = true;
+    this._laserRemain  = this._enraged ? 5 : 3;
+    this._laserTimer   = 0; // fire first beam immediately
+  }
+
+  _tickLaser(delta) {
+    if (!this._laserActive) return;
+    this._laserTimer -= delta;
+    if (this._laserTimer <= 0) {
+      this._fireLaserBeam();
+      this._laserRemain--;
+      if (this._laserRemain <= 0) {
+        this._laserActive = false;
+        this.behaviorTimer = this.behaviorInterval;
+      } else {
+        this._laserTimer = this._laserInterval;
+      }
+    }
+  }
+
+  _fireLaserBeam() {
+    if (!this.aimedBullets || !this._player || !this._player.alive) return;
+    this._ensureLaserTex();
+
+    // Predict player position slightly ahead
+    const px = this._player.sprite.body
+      ? this._player.x + this._player.sprite.body.velocity.x * 0.08
+      : this._player.x;
+    const py = this._player.sprite.body
+      ? this._player.y + this._player.sprite.body.velocity.y * 0.08
+      : this._player.y;
+
+    const spreadCount = this._enraged ? 3 : 2; // beams per salvo
+    const halfDeg     = this._enraged ? 6 : 4;
+    const speed       = this._enraged ? 520 : 440;
+
+    const baseAngle = Phaser.Math.Angle.Between(
+      this.sprite.x, this.sprite.y, px, py
+    );
+
+    for (let i = 0; i < spreadCount; i++) {
+      const offset = spreadCount === 1 ? 0
+        : -halfDeg + (i / (spreadCount - 1)) * halfDeg * 2;
+      const angle = baseAngle + Phaser.Math.DegToRad(offset);
+      const b = this.aimedBullets.get(this.sprite.x, this.sprite.y, 'boss_laser_tex');
+      if (!b) continue;
+      b.setActive(true).setVisible(true).setDepth(7);
+      b.body.setEnable(true);
+      b.body.reset(this.sprite.x, this.sprite.y);
+      b.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+    }
+  }
+
+  _ensureLaserTex() {
+    if (!this.scene.textures.exists('boss_laser_tex')) {
+      const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+      g.fillStyle(0x00ffff, 1);   // cyan laser core
+      g.fillRect(0, 1, 20, 3);
+      g.fillStyle(0xffffff, 0.8);
+      g.fillRect(0, 2, 20, 1);    // bright centre line
+      g.generateTexture('boss_laser_tex', 20, 5);
+      g.destroy();
+    }
+  }
+
+  // ── Bullet texture helper ───────────────────────────────────────────────────
   _ensureBulletTex(key, w, h, color) {
     if (!this.scene.textures.exists(key)) {
       const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
@@ -176,11 +295,10 @@ export class Boss {
     }
   }
 
+  // ── Hit / death ─────────────────────────────────────────────────────────────
   hit(damage = 1) {
     if (!this.alive) return;
-    console.log(`[Boss] hit(${damage}) — hp before=${this.hp}`);
     this.hp -= damage;
-    // Flash effect
     this.scene.tweens.add({
       targets: this.sprite,
       alpha: 0.2,
@@ -190,19 +308,42 @@ export class Boss {
     });
     this.scene.game.events.emit('bossHpUpdate', this.hp, this.maxHp);
 
+    if (!this._enraged && this.hp <= this.maxHp * 0.5) {
+      this._enrage();
+    }
+
     if (this.hp <= 0) {
       this._die();
     }
   }
 
+  _enrage() {
+    this._enraged = true;
+    this.behaviorInterval = 1400; // faster attack cadence
+    this._burstInterval   = 130;  // quicker burst
+    this._laserInterval   = 90;   // quicker laser
+
+    // Rapid red-flash to signal phase transition
+    let flashes = 0;
+    const flashInterval = this.scene.time.addEvent({
+      delay: 120,
+      repeat: 7,
+      callback: () => {
+        if (!this.alive) { flashInterval.remove(); return; }
+        flashes++;
+        this.sprite.setTint(flashes % 2 === 0 ? 0xff4444 : 0xffffff);
+        if (flashes >= 8) this.sprite.setTint(0xff4444);
+      }
+    });
+  }
+
   _die() {
-    console.log('[Boss] _die() called — emitting bossDefeated');
     this.alive = false;
     if (this.sprite.body) {
       this.sprite.body.setEnable(false);
     }
+    bossExplosion(this.scene, this.sprite.x, this.sprite.y);
     this.sprite.setActive(false).setVisible(false);
-    // Notify GameScene
     this.scene.game.events.emit('bossDefeated');
   }
 

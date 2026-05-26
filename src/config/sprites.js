@@ -56,4 +56,9 @@ export const SPRITES = {
     height: 14,
     color: 0xff6666,
   },
+  enemyD: {
+    width: 46,
+    height: 34,
+    color: 0x6622aa,  // purple carrier
+  },
 };

@@ -2,7 +2,9 @@ import { Player } from '../entities/Player.js';
 import { EnemyA } from '../entities/EnemyA.js';
 import { EnemyB } from '../entities/EnemyB.js';
 import { EnemyC } from '../entities/EnemyC.js';
+import { EnemyD } from '../entities/EnemyD.js';
 import { Boss } from '../entities/Boss.js';
+import { PowerUp } from '../entities/PowerUp.js';
 
 const NUM_STARS = 180;
 
@@ -16,6 +18,7 @@ export class GameScene extends Phaser.Scene {
     const H = this.scale.height;
     this._W = W;
     this._H = H;
+    this._score = 0;
     // ── Background stars ──────────────────────────────────────────────────────
     this._starLayers = [];
     const starData = [];
@@ -57,17 +60,28 @@ export class GameScene extends Phaser.Scene {
       maxSize: 20,
       runChildUpdate: false,
     });
+    this.missileBullets = this.physics.add.group({
+      maxSize: 20,
+      runChildUpdate: false,
+    });
 
     // ── Player ────────────────────────────────────────────────────────────────
     this.player = new Player(this, 100, H / 2);
     this.player.normalBullets = this.normalBullets;
     this.player.chargedBullets = this.chargedBullets;
+    this.player.missileBullets = this.missileBullets;
 
     // ── Enemy containers ──────────────────────────────────────────────────────
     this.enemiesA = [];
     this.enemiesB = [];
     this.enemiesC = [];
+    this.enemiesD = [];
+    this.powerUps = [];
     this.boss = null;
+
+    // ── Power-up drop type rotation ───────────────────────────────────────────
+    this._powerUpTypes = ['spread', 'missile', 'rapid'];
+    this._powerUpTypeIndex = 0;
 
     // ── Wave spawner ──────────────────────────────────────────────────────────
     this._gameTime = 0; // ms since scene start
@@ -93,8 +107,6 @@ export class GameScene extends Phaser.Scene {
 
     // ── Dev toolbar ───────────────────────────────────────────────────────────
     this._initDevToolbar();
-
-    console.log('[GameScene] create() complete — W=%d H=%d', W, H);
   }
 
   _initDevToolbar() {
@@ -132,7 +144,7 @@ export class GameScene extends Phaser.Scene {
 
     const btnClear = mkBtn('Clear Enemies', () => {
       console.log('[DEV] Clear all normal enemies');
-      for (const e of [...this.enemiesA, ...this.enemiesB, ...this.enemiesC]) {
+      for (const e of [...this.enemiesA, ...this.enemiesB, ...this.enemiesC, ...this.enemiesD]) {
         if (e.alive) {
           e.alive = false;
           if (e.sprite.body) e.sprite.body.setEnable(false);
@@ -152,7 +164,7 @@ export class GameScene extends Phaser.Scene {
         this._wavesTriggered.add(waveId);
       }
       // Clear any remaining normal enemies
-      for (const e of [...this.enemiesA, ...this.enemiesB, ...this.enemiesC]) {
+      for (const e of [...this.enemiesA, ...this.enemiesB, ...this.enemiesC, ...this.enemiesD]) {
         if (e.alive) {
           e.alive = false;
           if (e.sprite.body) e.sprite.body.setEnable(false);
@@ -189,19 +201,16 @@ export class GameScene extends Phaser.Scene {
 
     // Enemy bullets hit player
     this.physics.add.overlap(playerSprite, this.enemyBullets, (_player, bullet) => {
-      console.log('[ENEMY-BULLET-HIT] player hit by enemyBullet');
       this._recycleBullet(bullet);
       this._killPlayer();
     });
 
     // Spread & aimed bullets hit player
     this.physics.add.overlap(playerSprite, this.spreadBullets, (_player, bullet) => {
-      console.log('[ENEMY-BULLET-HIT] player hit by spreadBullet');
       this._recycleBullet(bullet);
       this._killPlayer();
     });
     this.physics.add.overlap(playerSprite, this.aimedBullets, (_player, bullet) => {
-      console.log('[ENEMY-BULLET-HIT] player hit by aimedBullet');
       this._recycleBullet(bullet);
       this._killPlayer();
     });
@@ -216,6 +225,9 @@ export class GameScene extends Phaser.Scene {
       this._handlePlayerBulletHit(bullet, enemy, sp);
     });
     this.physics.add.overlap(this.chargedBullets, sp, (_sp, bullet) => {
+      this._handlePlayerBulletHit(bullet, enemy, sp);
+    });
+    this.physics.add.overlap(this.missileBullets, sp, (_sp, bullet) => {
       this._handlePlayerBulletHit(bullet, enemy, sp);
     });
     // Enemy contact kills player
@@ -234,6 +246,9 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.overlap(this.chargedBullets, sp, (_sp, bullet) => {
       this._handlePlayerBulletHit(bullet, enemy, sp);
     });
+    this.physics.add.overlap(this.missileBullets, sp, (_sp, bullet) => {
+      this._handlePlayerBulletHit(bullet, enemy, sp);
+    });
     this.physics.add.overlap(this.player.sprite, sp, () => {
       if (enemy.alive) this._killPlayer();
     });
@@ -247,6 +262,9 @@ export class GameScene extends Phaser.Scene {
       this._handlePlayerBulletHit(bullet, enemy, sp);
     });
     this.physics.add.overlap(this.chargedBullets, sp, (_sp, bullet) => {
+      this._handlePlayerBulletHit(bullet, enemy, sp);
+    });
+    this.physics.add.overlap(this.missileBullets, sp, (_sp, bullet) => {
       this._handlePlayerBulletHit(bullet, enemy, sp);
     });
     this.physics.add.overlap(this.player.sprite, sp, () => {
@@ -263,8 +281,39 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.overlap(this.chargedBullets, boss.sprite, (_sp, bullet) => {
       this._handlePlayerBulletHit(bullet, boss, boss.sprite);
     });
+    this.physics.add.overlap(this.missileBullets, boss.sprite, (_sp, bullet) => {
+      this._handlePlayerBulletHit(bullet, boss, boss.sprite);
+    });
     this.physics.add.overlap(this.player.sprite, boss.sprite, () => {
       if (boss.alive) this._killPlayer();
+    });
+  }
+
+  _registerEnemyD(enemy) {
+    const sp = enemy.sprite;
+    this._ensureTargetId(sp, 'enemyD');
+
+    this.physics.add.overlap(this.normalBullets, sp, (_sp, bullet) => {
+      this._handlePlayerBulletHit(bullet, enemy, sp);
+    });
+    this.physics.add.overlap(this.chargedBullets, sp, (_sp, bullet) => {
+      this._handlePlayerBulletHit(bullet, enemy, sp);
+    });
+    this.physics.add.overlap(this.missileBullets, sp, (_sp, bullet) => {
+      this._handlePlayerBulletHit(bullet, enemy, sp);
+    });
+    this.physics.add.overlap(this.player.sprite, sp, () => {
+      if (enemy.alive) this._killPlayer();
+    });
+  }
+
+  _registerPowerUp(pu) {
+    this.physics.add.overlap(this.player.sprite, pu.sprite, () => {
+      if (!pu.alive) return;
+      pu.collect();
+      if (this.player.alive) {
+        this.player.activatePowerUp(pu.type);
+      }
     });
   }
 
@@ -276,46 +325,39 @@ export class GameScene extends Phaser.Scene {
   }
 
   _handlePlayerBulletHit(bullet, target, sprite) {
-    const pre = [
-      `active=${bullet?.active}`,
-      `bodyEnable=${bullet?.body?.enable}`,
-      `targetAlive=${target?.alive}`,
-      `spriteActive=${sprite?.active}`,
-      `piercing=${bullet?.piercing}`,
-      `damage=${bullet?.damage}`,
-      `hp=${target?.hp}`,
-      `bulletType=${bullet?.constructor?.name}`,
-      `bulletTexture=${bullet?.texture?.key}`,
-    ].join(' | ');
-    console.log('[HIT-CHECK]', pre);
-
     if (!bullet?.active || !bullet.body?.enable || !target?.alive || !sprite?.active) {
-      console.log('[HIT-CHECK] → REJECTED by guard');
       return;
     }
 
-    // Reject pool objects that haven't been properly initialized yet
     if (bullet.damage === undefined || bullet.piercing === undefined) {
-      console.warn('[HIT-CHECK] → REJECTED uninitialized bullet (damage/piercing undefined). texture=', bullet?.texture?.key);
       return;
     }
 
     const targetId = this._ensureTargetId(sprite);
     if (!bullet.hitTargets) bullet.hitTargets = new Set();
     if (bullet.hitTargets.has(targetId)) {
-      console.log('[HIT-CHECK] → REJECTED duplicate targetId', targetId);
       return;
     }
 
     bullet.hitTargets.add(targetId);
-    console.log('[HIT-CHECK] → HIT accepted. damage=', bullet.damage, 'target hp before=', target.hp);
 
     if (!bullet.piercing) {
       this._recycleBullet(bullet);
     }
 
+    const wasAlive = target.alive;
     target.hit(bullet.damage);
-    console.log('[HIT-CHECK] → target hp after=', target.hp, 'alive=', target.alive);
+
+    // Award score on kill
+    if (wasAlive && !target.alive) {
+      this._addScore(target.scoreValue ?? 0);
+    }
+  }
+
+  _addScore(points) {
+    if (!points) return;
+    this._score += points;
+    this.game.events.emit('scoreUpdate', this._score);
   }
 
   _recycleBullet(bullet) {
@@ -334,14 +376,13 @@ export class GameScene extends Phaser.Scene {
     const t = this._gameTime;
 
     // ── Compressed test timeline: active waves, boss at 20s ───────────────────
-    if (t >= 2000  && !this._wavesTriggered.has(1))  { this._wavesTriggered.add(1);  console.log('[WAVE] 1 — EnemyA x3'); this._spawnEnemyA(3); }
-    if (t >= 5000  && !this._wavesTriggered.has(2))  { this._wavesTriggered.add(2);  console.log('[WAVE] 2 — EnemyA x3 + EnemyB x2'); this._spawnEnemyA(3); this._spawnEnemyB(2); }
-    if (t >= 8000  && !this._wavesTriggered.has(3))  { this._wavesTriggered.add(3);  console.log('[WAVE] 3 — EnemyB x4'); this._spawnEnemyB(4); }
-    if (t >= 11000 && !this._wavesTriggered.has(4))  { this._wavesTriggered.add(4);  console.log('[WAVE] 4 — EnemyA x3 + EnemyC x1'); this._spawnEnemyA(3); this._spawnEnemyC(1); }
-    if (t >= 14000 && !this._wavesTriggered.has(5))  { this._wavesTriggered.add(5);  console.log('[WAVE] 5 — EnemyB x4 + EnemyC x2'); this._spawnEnemyB(4); this._spawnEnemyC(2); }
+    if (t >= 2000  && !this._wavesTriggered.has(1))  { this._wavesTriggered.add(1);  this._spawnEnemyA(3); }
+    if (t >= 5000  && !this._wavesTriggered.has(2))  { this._wavesTriggered.add(2);  this._spawnEnemyA(3); this._spawnEnemyB(2); }
+    if (t >= 8000  && !this._wavesTriggered.has(3))  { this._wavesTriggered.add(3);  this._spawnEnemyB(4); }
+    if (t >= 11000 && !this._wavesTriggered.has(4))  { this._wavesTriggered.add(4);  this._spawnEnemyA(3); this._spawnEnemyC(1); }
+    if (t >= 14000 && !this._wavesTriggered.has(5))  { this._wavesTriggered.add(5);  this._spawnEnemyB(4); this._spawnEnemyC(2); }
     if (t >= 17000 && !this._wavesTriggered.has(6))  {
       this._wavesTriggered.add(6);
-      console.log('[WAVE] 6 — EnemyA x4 + EnemyB x3 (slow scroll)');
       this._spawnEnemyA(4);
       this._spawnEnemyB(3);
       this._bgScrollSpeed = 0.3;
@@ -350,10 +391,41 @@ export class GameScene extends Phaser.Scene {
     // ── Boss entrance (20s) ───────────────────────────────────────────────────
     if (t >= 20000 && !this._wavesTriggered.has(7)) {
       this._wavesTriggered.add(7);
-      console.log('[WAVE] 7 — BOSS ENTERS');
       this._scrollLocked = true;
       this._bgScrollSpeed = 0;
       this._spawnBoss();
+    }
+
+    // ── EnemyD Carrier waves (before boss) ───────────────────────────────────
+    if (t >= 500   && !this._wavesTriggered.has(8)) {
+      this._wavesTriggered.add(8);
+      this._spawnEnemyD(1); // drops: spread
+    }
+    if (t >= 4000  && !this._wavesTriggered.has(9)) {
+      this._wavesTriggered.add(9);
+      this._spawnEnemyD(1); // drops: missile
+    }
+    if (t >= 8000  && !this._wavesTriggered.has(10)) {
+      this._wavesTriggered.add(10);
+      this._spawnEnemyD(1); // drops: rapid
+    }
+
+    // ── Difficulty scaling triggers ───────────────────────────────────────────
+    if (t >= 10000 && !this._wavesTriggered.has('diff-a1')) {
+      this._wavesTriggered.add('diff-a1');
+      for (const e of this.enemiesA) { if (e.alive) e.scaleDifficulty(1); }
+    }
+    if (t >= 13000 && !this._wavesTriggered.has('diff-b1')) {
+      this._wavesTriggered.add('diff-b1');
+      for (const e of this.enemiesB) { if (e.alive) e.scaleDifficulty(1); }
+    }
+    if (t >= 16000 && !this._wavesTriggered.has('diff-c1')) {
+      this._wavesTriggered.add('diff-c1');
+      for (const e of this.enemiesC) { if (e.alive) e.scaleDifficulty(1); }
+    }
+    if (t >= 19000 && !this._wavesTriggered.has('diff-a2')) {
+      this._wavesTriggered.add('diff-a2');
+      for (const e of this.enemiesA) { if (e.alive) e.scaleDifficulty(2); }
     }
   }
 
@@ -364,8 +436,12 @@ export class GameScene extends Phaser.Scene {
     for (let i = 0; i < count; i++) {
       const y = startY + i * spacing;
       const e = new EnemyA(this, W + 40, Phaser.Math.Clamp(y, 60, H - 60));
+      e.scoreValue = 100;
       e.enemyBullets = this.enemyBullets;
       e._player = this.player;
+      // Apply already-active difficulty tiers
+      if (this._gameTime >= 10000) e.scaleDifficulty(1);
+      if (this._gameTime >= 19000) e.scaleDifficulty(2);
       this.enemiesA.push(e);
       this._registerEnemyA(e);
     }
@@ -381,7 +457,9 @@ export class GameScene extends Phaser.Scene {
         const y = H / 2 - ((rows - 1) * 50) / 2 + row * 50;
         const x = W + 40 + col * 36;
         const e = new EnemyB(this, x, Phaser.Math.Clamp(y, 60, H - 60));
+        e.scoreValue = 150;
         e._player = this.player;
+        if (this._gameTime >= 13000) e.scaleDifficulty(1);
         this.enemiesB.push(e);
         this._registerEnemyB(e);
         spawned++;
@@ -396,11 +474,41 @@ export class GameScene extends Phaser.Scene {
     for (let i = 0; i < count; i++) {
       const y = Phaser.Math.Clamp(startY + i * spacing, 60, H - 60);
       const e = new EnemyC(this, W + 60 + i * 50, y);
+      e.scoreValue = 200;
       e.enemyBullets = this.enemyBullets;
       e._player = this.player;
+      if (this._gameTime >= 16000) e.scaleDifficulty(1);
       this.enemiesC.push(e);
       this._registerEnemyC(e);
     }
+  }
+
+  _spawnEnemyD(count) {
+    const W = this._W, H = this._H;
+    for (let i = 0; i < count; i++) {
+      const y = Phaser.Math.Between(80, H - 80);
+      const dropType = this._nextPowerUpType();
+      const e = new EnemyD(this, W + 60, y, (ex, ey) => {
+        this._spawnPowerUp(ex, ey, dropType);
+      });
+      e.scoreValue = 300;
+      e.enemyBullets = this.enemyBullets;
+      e._player = this.player;
+      this.enemiesD.push(e);
+      this._registerEnemyD(e);
+    }
+  }
+
+  _nextPowerUpType() {
+    const type = this._powerUpTypes[this._powerUpTypeIndex % this._powerUpTypes.length];
+    this._powerUpTypeIndex++;
+    return type;
+  }
+
+  _spawnPowerUp(x, y, type) {
+    const pu = new PowerUp(this, x, y, type);
+    this.powerUps.push(pu);
+    this._registerPowerUp(pu);
   }
 
   _spawnBoss() {
@@ -444,16 +552,17 @@ export class GameScene extends Phaser.Scene {
     this.time.delayedCall(600, () => {
       this.game.events.emit('chargeUpdate', 0);
       this.scene.stop('UIScene');
-      this.scene.start('GameOverScene');
+      this.scene.start('GameOverScene', { score: this._score });
     });
   }
 
   _onBossDefeated() {
     if (this._gameOver) return;
     this._gameOver = true;
+    this._addScore(1000); // Boss kill bonus
     this.time.delayedCall(800, () => {
       this.scene.stop('UIScene');
-      this.scene.start('WinScene');
+      this.scene.start('WinScene', { score: this._score });
     });
   }
 
@@ -473,6 +582,7 @@ export class GameScene extends Phaser.Scene {
 
     // Player
     this.player.update(time, delta);
+    this.player.updateMissiles(delta);
 
     // Enemies A
     for (const e of this.enemiesA) {
@@ -489,6 +599,16 @@ export class GameScene extends Phaser.Scene {
       if (e.alive) e.update(time, delta);
     }
 
+    // Enemies D
+    for (const e of this.enemiesD) {
+      if (e.alive) e.update(time, delta);
+    }
+
+    // Power-ups
+    for (const pu of this.powerUps) {
+      if (pu.alive) pu.update(time, delta);
+    }
+
     // Boss
     if (this.boss && this.boss.alive) {
       this.boss.update(time, delta);
@@ -500,6 +620,7 @@ export class GameScene extends Phaser.Scene {
     this._cullBullets(this.enemyBullets);
     this._cullBullets(this.spreadBullets);
     this._cullBullets(this.aimedBullets);
+    this._cullBullets(this.missileBullets);
   }
 
   _drawStars(delta) {

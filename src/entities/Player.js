@@ -1,4 +1,5 @@
 import { SPRITES } from '../config/sprites.js';
+import { createEngineTrail } from '../utils/particles.js';
 
 export const PLAYER_SPEED = 253;
 
@@ -14,7 +15,6 @@ export class Player {
 
     // Physics rectangle as the visual/body
     this.sprite = scene.physics.add.image(x, y, '__DEFAULT');
-    // Generate a plain colored rectangle texture on the fly
     const cfg = SPRITES.player;
     this._makeTexture('player_tex', cfg.width, cfg.height, cfg.color);
     this.sprite.setTexture('player_tex');
@@ -39,11 +39,13 @@ export class Player {
 
     // Shooting state
     this.fireTimer = 0;
-    this.fireRate = 160; // ms between rapid-fire bullets
+    this._baseFireRate = 160; // ms between rapid-fire bullets
+    this.fireRate = this._baseFireRate;
     this.normalDamage = 1;
     this.chargedDamage = 2;
     this.chargeTime = 0;
-    this.maxCharge = 1500; // ms to full charge
+    this._baseMaxCharge = 1500;
+    this.maxCharge = this._baseMaxCharge;
     this.isCharging = false;
 
     this.alive = true;
@@ -51,6 +53,24 @@ export class Player {
     // Bullet groups (set from GameScene after creation)
     this.normalBullets = null;
     this.chargedBullets = null;
+
+    // ── Power-up state (each is permanent once collected, all can stack) ─────
+    this._hasSpread  = false;
+    this._hasMissile = false;
+    this._hasRapid   = false;
+
+    // Missile state
+    this._missileFireTimer = 0;      // countdown to next missile salvo
+    this._missileFireRate  = 1200;   // ms between salvos (top + bottom each time)
+    this.missileBullets = null;      // set from GameScene
+
+    // Laser beam graphics (created on demand)
+    this._laserGfx = scene.add.graphics().setDepth(10);
+    this._laserActive = false;
+    this._laserDamageTimers = new Map(); // target → cooldown ms remaining
+
+    // Engine trail (Phaser 3.60 particles)
+    this._engineTrail = createEngineTrail(scene, this.sprite);
   }
 
   _makeTexture(key, w, h, color) {
@@ -66,6 +86,36 @@ export class Player {
   get x() { return this.sprite.x; }
   get y() { return this.sprite.y; }
 
+  // ── Power-up activation ────────────────────────────────────────────────────
+  activatePowerUp(type) {
+    if (type === 'spread')  this._hasSpread  = true;
+    if (type === 'missile') {
+      this._hasMissile = true;
+      this._missileFireTimer = 0; // fire immediately
+    }
+    if (type === 'rapid') {
+      this._hasRapid  = true;
+      this.fireRate   = this._baseFireRate / 3;
+      this.maxCharge  = this._baseMaxCharge / 2;
+    }
+    this._emitPowerUpUpdate();
+  }
+
+  _emitPowerUpUpdate() {
+    const active = [];
+    if (this._hasSpread)  active.push('spread');
+    if (this._hasMissile) active.push('missile');
+    if (this._hasRapid)   active.push('rapid');
+    this.game.events.emit('powerUpUpdate', active);
+  }
+
+  _clearLaser() {
+    this._laserActive = false;
+    this._laserGfx.clear();
+    this._laserDamageTimers.clear();
+  }
+
+  // ── Main update ────────────────────────────────────────────────────────────
   update(time, delta) {
     if (!this.alive) return;
 
@@ -79,33 +129,50 @@ export class Player {
     if (keyW.isDown) vy = -PLAYER_SPEED;
     if (keyS.isDown) vy =  PLAYER_SPEED;
 
-    // Normalize diagonal
     if (vx !== 0 && vy !== 0) {
       vx *= 0.7071;
       vy *= 0.7071;
     }
     sp.setVelocity(vx, vy);
 
-    // --- Rapid-fire (J key) ---
-    if (Phaser.Input.Keyboard.JustDown(this.keyJ)) {
-      this.fireTimer = 0; // fire immediately on press
-    }
-    if (this.keyJ.isDown && this.normalBullets) {
-      this.fireTimer -= delta;
-      if (this.fireTimer <= 0) {
-        this._fireNormal();
-        this.fireTimer = this.fireRate;
+    // ── Missile auto-fire (no key needed) ─────────────────────────────────
+    if (this._hasMissile && this.missileBullets) {
+      this._missileFireTimer -= delta;
+      if (this._missileFireTimer <= 0) {
+        this._fireMissileSalvo();
+        this._missileFireTimer = this._missileFireRate;
       }
     }
 
-    // --- Charge shot (K key) ---
+    // ── Firing — J key ─────────────────────────────────────────────────────
+    if (Phaser.Input.Keyboard.JustDown(this.keyJ)) {
+      this.fireTimer = 0;
+    }
+
+    if (this.keyJ.isDown && this.normalBullets) {
+      // Clear laser if previously active
+      if (this._laserActive) this._clearLaser();
+
+      this.fireTimer -= delta;
+      if (this.fireTimer <= 0) {
+        if (this._hasSpread) {
+          this._fireSpread();
+        } else {
+          this._fireNormal();
+        }
+        this.fireTimer = this.fireRate;
+      }
+    } else {
+      if (this._laserActive) this._clearLaser();
+    }
+
+    // ── Charge shot — K key ────────────────────────────────────────────────
     if (this.keyK.isDown) {
       this.isCharging = true;
       this.chargeTime = Math.min(this.chargeTime + delta, this.maxCharge);
     }
 
     if (!this.keyK.isDown && this.isCharging) {
-      // Release — fire charged shot
       this.isCharging = false;
       if (this.chargedBullets && this.chargeTime > 200) {
         this._fireCharged();
@@ -121,10 +188,130 @@ export class Player {
     this.chargeBar.x = sp.x + cfg.width / 2 - 2;
     this.chargeBar.y = sp.y;
 
-    // Emit charge ratio for UIScene HUD
     this.game.events.emit('chargeUpdate', chargeRatio);
   }
 
+  // ── Missile mode ───────────────────────────────────────────────────────────
+  _getNearestEnemy() {
+    const scene = this.scene;
+    const allEnemies = [
+      ...(scene.enemiesA ?? []),
+      ...(scene.enemiesB ?? []),
+      ...(scene.enemiesC ?? []),
+      ...(scene.enemiesD ?? []),
+      ...(scene.boss ? [scene.boss] : []),
+    ];
+    let nearest = null;
+    let minDist = Infinity;
+    for (const e of allEnemies) {
+      if (!e.alive || !e.sprite.active) continue;
+      const dx = e.sprite.x - this.sprite.x;
+      const dy = e.sprite.y - this.sprite.y;
+      const d = dx * dx + dy * dy;
+      if (d < minDist) { minDist = d; nearest = e; }
+    }
+    return nearest;
+  }
+
+  _fireMissileSalvo() {
+    if (!this.missileBullets) return;
+    const cfg = SPRITES.player;
+    const ox = this.sprite.x + cfg.width / 2;
+    // Top missile
+    this._launchMissile(ox, this.sprite.y - cfg.height / 2 - 2);
+    // Bottom missile
+    this._launchMissile(ox, this.sprite.y + cfg.height / 2 + 2);
+  }
+
+  _launchMissile(ox, oy) {
+    const target = this._getNearestEnemy();
+    this._ensureMissileTex();
+    const m = this.missileBullets.get(ox, oy, 'missile_tex');
+    if (!m) return;
+    m.setActive(true).setVisible(true).setDepth(9);
+    m.body.setEnable(true);
+    m.body.reset(ox, oy);
+    m.damage = 2;
+    m.piercing = false;
+    m.hitTargets = new Set();
+    m._target = target;       // homing target (may be null)
+    m._speed = 420;
+    // Initial velocity: straight right if no target, else toward target
+    if (target) {
+      const angle = Phaser.Math.Angle.Between(ox, oy, target.sprite.x, target.sprite.y);
+      m.setVelocity(Math.cos(angle) * m._speed, Math.sin(angle) * m._speed);
+    } else {
+      m.setVelocity(m._speed, 0);
+    }
+  }
+
+  _ensureMissileTex() {
+    if (!this.scene.textures.exists('missile_tex')) {
+      const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+      g.fillStyle(0xff4400, 1);
+      g.fillRect(0, 2, 14, 4);   // body
+      g.fillStyle(0xffdd00, 1);
+      g.fillRect(12, 3, 4, 2);   // nose glow
+      g.generateTexture('missile_tex', 16, 8);
+      g.destroy();
+    }
+  }
+
+  // Called from GameScene each frame to steer active missiles
+  updateMissiles(delta) {
+    if (!this.missileBullets) return;
+    const turnSpeed = 4.5; // radians per second
+    for (const m of this.missileBullets.getChildren()) {
+      if (!m.active || !m.body?.enable) continue;
+      const target = m._target;
+      // Re-acquire if old target died
+      if (!target || !target.alive || !target.sprite.active) {
+        m._target = this._getNearestEnemy();
+      }
+      const t = m._target;
+      if (!t) continue;
+      const currentAngle = Math.atan2(m.body.velocity.y, m.body.velocity.x);
+      const desiredAngle = Phaser.Math.Angle.Between(m.x, m.y, t.sprite.x, t.sprite.y);
+      const diff = Phaser.Math.Angle.Wrap(desiredAngle - currentAngle);
+      const maxTurn = turnSpeed * (delta / 1000);
+      const turn = Phaser.Math.Clamp(diff, -maxTurn, maxTurn);
+      const newAngle = currentAngle + turn;
+      m.setVelocity(Math.cos(newAngle) * m._speed, Math.sin(newAngle) * m._speed);
+    }
+  }
+
+  // ── Spread shot ────────────────────────────────────────────────────────────
+  _fireSpread() {
+    const angles = [-15, 0, 15];
+    for (const deg of angles) {
+      const rad = Phaser.Math.DegToRad(deg);
+      this._fireBulletAtAngle(rad);
+    }
+  }
+
+  _fireBulletAtAngle(angleOffset) {
+    const cfg = SPRITES.bulletNormal;
+    this._ensureTexture('bullet_normal_tex', cfg.width, cfg.height, cfg.color);
+    const b = this.normalBullets.get(
+      this.sprite.x + SPRITES.player.width / 2 + 4,
+      this.sprite.y,
+      'bullet_normal_tex'
+    );
+    if (!b) return;
+    b.body.setEnable(false);
+    b.charged = false;
+    b.piercing = false;
+    b.damage = this.normalDamage;
+    b.hitTargets = new Set();
+    b.setActive(true).setVisible(true).setDepth(9);
+    b.body.reset(this.sprite.x + SPRITES.player.width / 2 + 4, this.sprite.y);
+    const speed = 600;
+    b.setVelocityX(Math.cos(angleOffset) * speed);
+    b.setVelocityY(Math.sin(angleOffset) * speed);
+    b.body.setEnable(true);
+  }
+
+  // ── Normal / charged fire ──────────────────────────────────────────────────
   _fireNormal() {
     const cfg = SPRITES.bulletNormal;
     this._ensureTexture('bullet_normal_tex', cfg.width, cfg.height, cfg.color);
@@ -134,20 +321,16 @@ export class Player {
       'bullet_normal_tex'
     );
     if (!b) return;
-    // Immediately disable body so no overlap fires while we configure
     b.body.setEnable(false);
-    // Set all game properties
     b.charged = false;
     b.piercing = false;
     b.damage = this.normalDamage;
     b.hitTargets = new Set();
-    // Now position, configure and re-enable
     b.setActive(true).setVisible(true).setDepth(9);
     b.body.reset(this.sprite.x + SPRITES.player.width / 2 + 4, this.sprite.y);
     b.setVelocityX(600);
     b.setVelocityY(0);
     b.body.setEnable(true);
-    console.log('[FIRE-NORMAL] damage=', b.damage, 'piercing=', b.piercing, 'bodyEnable=', b.body.enable);
   }
 
   _fireCharged() {
@@ -159,20 +342,16 @@ export class Player {
       'bullet_charged_tex'
     );
     if (!b) return;
-    // Immediately disable body so no overlap fires while we configure
     b.body.setEnable(false);
-    // Set all game properties
     b.charged = true;
     b.piercing = true;
     b.damage = this.chargedDamage;
     b.hitTargets = new Set();
-    // Now position, configure and re-enable
     b.setActive(true).setVisible(true).setDepth(9);
     b.body.reset(this.sprite.x + SPRITES.player.width / 2 + 4, this.sprite.y);
     b.setVelocityX(480);
     b.setVelocityY(0);
     b.body.setEnable(true);
-    console.log('[FIRE-CHARGED] damage=', b.damage, 'piercing=', b.piercing, 'bodyEnable=', b.body.enable);
   }
 
   _ensureTexture(key, w, h, color) {
@@ -188,12 +367,24 @@ export class Player {
   die() {
     if (!this.alive) return;
     this.alive = false;
+    this._clearLaser();
+    this._hasSpread  = false;
+    this._hasMissile = false;
+    this._hasRapid   = false;
+    this.fireRate    = this._baseFireRate;
+    this.maxCharge   = this._baseMaxCharge;
     this.sprite.setActive(false).setVisible(false);
     this.chargeBar.setVisible(false);
+    if (this._engineTrail) {
+      this._engineTrail.stop();
+    }
+    this.game.events.emit('powerUpUpdate', []);
   }
 
   destroy() {
+    this._clearLaser();
     this.chargeBar.destroy();
+    this._laserGfx.destroy();
     this.sprite.destroy();
   }
 }
