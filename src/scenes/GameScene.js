@@ -1,0 +1,530 @@
+import { Player } from '../entities/Player.js';
+import { EnemyA } from '../entities/EnemyA.js';
+import { EnemyB } from '../entities/EnemyB.js';
+import { EnemyC } from '../entities/EnemyC.js';
+import { Boss } from '../entities/Boss.js';
+
+const NUM_STARS = 180;
+
+export class GameScene extends Phaser.Scene {
+  constructor() {
+    super({ key: 'GameScene' });
+  }
+
+  create() {
+    const W = this.scale.width;
+    const H = this.scale.height;
+    this._W = W;
+    this._H = H;
+    // ── Background stars ──────────────────────────────────────────────────────
+    this._starLayers = [];
+    const starData = [];
+    for (let i = 0; i < NUM_STARS; i++) {
+      starData.push({
+        x: Phaser.Math.Between(0, W),
+        y: Phaser.Math.Between(0, H),
+        size: Phaser.Math.FloatBetween(0.8, 2.2),
+        speed: Phaser.Math.FloatBetween(0.4, 2.0),
+        alpha: Phaser.Math.FloatBetween(0.4, 1.0),
+      });
+    }
+    this._stars = starData;
+    this._starGfx = this.add.graphics().setDepth(0);
+    this._scrollLocked = false;
+    this._bgScrollSpeed = 1.0; // multiplier
+
+    // ── Physics world bounds ──────────────────────────────────────────────────
+    this.physics.world.setBounds(0, 0, W, H);
+
+    // ── Bullet groups ─────────────────────────────────────────────────────────
+    this.normalBullets = this.physics.add.group({
+      maxSize: 40,
+      runChildUpdate: false,
+    });
+    this.chargedBullets = this.physics.add.group({
+      maxSize: 10,
+      runChildUpdate: false,
+    });
+    this.enemyBullets = this.physics.add.group({
+      maxSize: 60,
+      runChildUpdate: false,
+    });
+    this.spreadBullets = this.physics.add.group({
+      maxSize: 30,
+      runChildUpdate: false,
+    });
+    this.aimedBullets = this.physics.add.group({
+      maxSize: 20,
+      runChildUpdate: false,
+    });
+
+    // ── Player ────────────────────────────────────────────────────────────────
+    this.player = new Player(this, 100, H / 2);
+    this.player.normalBullets = this.normalBullets;
+    this.player.chargedBullets = this.chargedBullets;
+
+    // ── Enemy containers ──────────────────────────────────────────────────────
+    this.enemiesA = [];
+    this.enemiesB = [];
+    this.enemiesC = [];
+    this.boss = null;
+
+    // ── Wave spawner ──────────────────────────────────────────────────────────
+    this._gameTime = 0; // ms since scene start
+    this._wavesTriggered = new Set();
+    this._bossActive = false;
+    this._gameOver = false;
+    this._nextTargetId = 1;
+
+    // ── Collision setup ───────────────────────────────────────────────────────
+    this._setupCollisions();
+
+    // ── Boss defeated handler ─────────────────────────────────────────────────
+    this.game.events.off('bossDefeated', this._onBossDefeated, this); // clear any stale from prev run
+    this.game.events.once('bossDefeated', this._onBossDefeated, this);
+
+    // ── Cleanup on shutdown ───────────────────────────────────────────────────
+    this.events.once('shutdown', () => {
+      this.game.events.off('bossDefeated', this._onBossDefeated, this);
+    });
+
+    // ── Launch UIScene in parallel ────────────────────────────────────────────
+    this.scene.launch('UIScene');
+
+    // ── Dev toolbar ───────────────────────────────────────────────────────────
+    this._initDevToolbar();
+
+    console.log('[GameScene] create() complete — W=%d H=%d', W, H);
+  }
+
+  _initDevToolbar() {
+    // Remove any leftover toolbar from a previous run
+    const existing = document.getElementById('dev-toolbar');
+    if (existing) existing.remove();
+
+    const bar = document.createElement('div');
+    bar.id = 'dev-toolbar';
+    bar.style.cssText = [
+      'position:fixed', 'bottom:12px', 'right:12px', 'z-index:9999',
+      'display:flex', 'gap:8px', 'align-items:center',
+      'background:rgba(0,0,0,0.75)', 'border:1px solid #444',
+      'border-radius:6px', 'padding:6px 10px',
+      'font-family:monospace', 'font-size:12px',
+    ].join(';');
+
+    const label = document.createElement('span');
+    label.textContent = 'DEV';
+    label.style.cssText = 'color:#ff8800;font-weight:bold;margin-right:4px';
+
+    const mkBtn = (text, onClick) => {
+      const b = document.createElement('button');
+      b.textContent = text;
+      b.style.cssText = [
+        'cursor:pointer', 'background:#222', 'color:#eee',
+        'border:1px solid #555', 'border-radius:4px',
+        'padding:3px 10px', 'font-family:monospace', 'font-size:12px',
+      ].join(';');
+      b.addEventListener('mouseenter', () => b.style.background = '#444');
+      b.addEventListener('mouseleave', () => b.style.background = '#222');
+      b.addEventListener('click', onClick);
+      return b;
+    };
+
+    const btnClear = mkBtn('Clear Enemies', () => {
+      console.log('[DEV] Clear all normal enemies');
+      for (const e of [...this.enemiesA, ...this.enemiesB, ...this.enemiesC]) {
+        if (e.alive) {
+          e.alive = false;
+          if (e.sprite.body) e.sprite.body.setEnable(false);
+          e.sprite.setActive(false).setVisible(false);
+        }
+      }
+    });
+
+    const btnBoss = mkBtn('Enter Boss Phase', () => {
+      if (this._bossActive) {
+        console.log('[DEV] Boss already active, skipping');
+        return;
+      }
+      console.log('[DEV] Entering boss phase — skipping all normal waves');
+      // Mark all normal-enemy waves as triggered so they never fire
+      for (let waveId = 1; waveId <= 6; waveId++) {
+        this._wavesTriggered.add(waveId);
+      }
+      // Clear any remaining normal enemies
+      for (const e of [...this.enemiesA, ...this.enemiesB, ...this.enemiesC]) {
+        if (e.alive) {
+          e.alive = false;
+          if (e.sprite.body) e.sprite.body.setEnable(false);
+          e.sprite.setActive(false).setVisible(false);
+        }
+      }
+      this._scrollLocked = true;
+      this._bgScrollSpeed = 0;
+      this._wavesTriggered.add(7); // prevent wave spawner from double-spawning
+      this._spawnBoss();
+    });
+
+    bar.append(label, btnClear, btnBoss);
+    document.body.appendChild(bar);
+
+    // Auto-remove toolbar when scene shuts down
+    this.events.once('shutdown', () => {
+      const tb = document.getElementById('dev-toolbar');
+      if (tb) tb.remove();
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // COLLISIONS
+  // ─────────────────────────────────────────────────────────────────────────────
+  _setupCollisions() {
+    const playerSprite = this.player.sprite;
+
+    // Player normal bullets vs enemies A
+    this.physics.add.overlap(this.normalBullets, [], () => {}, null, this);
+    // (dynamic — added per enemy in _registerEnemy)
+
+    // Player bullets vs enemy bullets: pass through (shmup style)
+
+    // Enemy bullets hit player
+    this.physics.add.overlap(playerSprite, this.enemyBullets, (_player, bullet) => {
+      console.log('[ENEMY-BULLET-HIT] player hit by enemyBullet');
+      this._recycleBullet(bullet);
+      this._killPlayer();
+    });
+
+    // Spread & aimed bullets hit player
+    this.physics.add.overlap(playerSprite, this.spreadBullets, (_player, bullet) => {
+      console.log('[ENEMY-BULLET-HIT] player hit by spreadBullet');
+      this._recycleBullet(bullet);
+      this._killPlayer();
+    });
+    this.physics.add.overlap(playerSprite, this.aimedBullets, (_player, bullet) => {
+      console.log('[ENEMY-BULLET-HIT] player hit by aimedBullet');
+      this._recycleBullet(bullet);
+      this._killPlayer();
+    });
+  }
+
+  // Register an enemy so player bullets collide with it
+  _registerEnemyA(enemy) {
+    const sp = enemy.sprite;
+    this._ensureTargetId(sp, 'enemyA');
+
+    this.physics.add.overlap(this.normalBullets, sp, (_sp, bullet) => {
+      this._handlePlayerBulletHit(bullet, enemy, sp);
+    });
+    this.physics.add.overlap(this.chargedBullets, sp, (_sp, bullet) => {
+      this._handlePlayerBulletHit(bullet, enemy, sp);
+    });
+    // Enemy contact kills player
+    this.physics.add.overlap(this.player.sprite, sp, () => {
+      if (enemy.alive) this._killPlayer();
+    });
+  }
+
+  _registerEnemyB(enemy) {
+    const sp = enemy.sprite;
+    this._ensureTargetId(sp, 'enemyB');
+
+    this.physics.add.overlap(this.normalBullets, sp, (_sp, bullet) => {
+      this._handlePlayerBulletHit(bullet, enemy, sp);
+    });
+    this.physics.add.overlap(this.chargedBullets, sp, (_sp, bullet) => {
+      this._handlePlayerBulletHit(bullet, enemy, sp);
+    });
+    this.physics.add.overlap(this.player.sprite, sp, () => {
+      if (enemy.alive) this._killPlayer();
+    });
+  }
+
+  _registerEnemyC(enemy) {
+    const sp = enemy.sprite;
+    this._ensureTargetId(sp, 'enemyC');
+
+    this.physics.add.overlap(this.normalBullets, sp, (_sp, bullet) => {
+      this._handlePlayerBulletHit(bullet, enemy, sp);
+    });
+    this.physics.add.overlap(this.chargedBullets, sp, (_sp, bullet) => {
+      this._handlePlayerBulletHit(bullet, enemy, sp);
+    });
+    this.physics.add.overlap(this.player.sprite, sp, () => {
+      if (enemy.alive) this._killPlayer();
+    });
+  }
+
+  _registerBoss(boss) {
+    this._ensureTargetId(boss.sprite, 'boss');
+
+    this.physics.add.overlap(this.normalBullets, boss.sprite, (_sp, bullet) => {
+      this._handlePlayerBulletHit(bullet, boss, boss.sprite);
+    });
+    this.physics.add.overlap(this.chargedBullets, boss.sprite, (_sp, bullet) => {
+      this._handlePlayerBulletHit(bullet, boss, boss.sprite);
+    });
+    this.physics.add.overlap(this.player.sprite, boss.sprite, () => {
+      if (boss.alive) this._killPlayer();
+    });
+  }
+
+  _ensureTargetId(sprite, prefix = 'target') {
+    if (!sprite._hitTargetId) {
+      sprite._hitTargetId = `${prefix}-${this._nextTargetId++}`;
+    }
+    return sprite._hitTargetId;
+  }
+
+  _handlePlayerBulletHit(bullet, target, sprite) {
+    const pre = [
+      `active=${bullet?.active}`,
+      `bodyEnable=${bullet?.body?.enable}`,
+      `targetAlive=${target?.alive}`,
+      `spriteActive=${sprite?.active}`,
+      `piercing=${bullet?.piercing}`,
+      `damage=${bullet?.damage}`,
+      `hp=${target?.hp}`,
+      `bulletType=${bullet?.constructor?.name}`,
+      `bulletTexture=${bullet?.texture?.key}`,
+    ].join(' | ');
+    console.log('[HIT-CHECK]', pre);
+
+    if (!bullet?.active || !bullet.body?.enable || !target?.alive || !sprite?.active) {
+      console.log('[HIT-CHECK] → REJECTED by guard');
+      return;
+    }
+
+    // Reject pool objects that haven't been properly initialized yet
+    if (bullet.damage === undefined || bullet.piercing === undefined) {
+      console.warn('[HIT-CHECK] → REJECTED uninitialized bullet (damage/piercing undefined). texture=', bullet?.texture?.key);
+      return;
+    }
+
+    const targetId = this._ensureTargetId(sprite);
+    if (!bullet.hitTargets) bullet.hitTargets = new Set();
+    if (bullet.hitTargets.has(targetId)) {
+      console.log('[HIT-CHECK] → REJECTED duplicate targetId', targetId);
+      return;
+    }
+
+    bullet.hitTargets.add(targetId);
+    console.log('[HIT-CHECK] → HIT accepted. damage=', bullet.damage, 'target hp before=', target.hp);
+
+    if (!bullet.piercing) {
+      this._recycleBullet(bullet);
+    }
+
+    target.hit(bullet.damage);
+    console.log('[HIT-CHECK] → target hp after=', target.hp, 'alive=', target.alive);
+  }
+
+  _recycleBullet(bullet) {
+    bullet.setActive(false).setVisible(false);
+    bullet.setVelocity(0, 0);
+    if (bullet.body) {
+      bullet.body.setEnable(false);
+    }
+    bullet.hitTargets = new Set();
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // WAVE SPAWNER
+  // ─────────────────────────────────────────────────────────────────────────────
+  _checkWaves() {
+    const t = this._gameTime;
+
+    // ── Compressed test timeline: active waves, boss at 20s ───────────────────
+    if (t >= 2000  && !this._wavesTriggered.has(1))  { this._wavesTriggered.add(1);  console.log('[WAVE] 1 — EnemyA x3'); this._spawnEnemyA(3); }
+    if (t >= 5000  && !this._wavesTriggered.has(2))  { this._wavesTriggered.add(2);  console.log('[WAVE] 2 — EnemyA x3 + EnemyB x2'); this._spawnEnemyA(3); this._spawnEnemyB(2); }
+    if (t >= 8000  && !this._wavesTriggered.has(3))  { this._wavesTriggered.add(3);  console.log('[WAVE] 3 — EnemyB x4'); this._spawnEnemyB(4); }
+    if (t >= 11000 && !this._wavesTriggered.has(4))  { this._wavesTriggered.add(4);  console.log('[WAVE] 4 — EnemyA x3 + EnemyC x1'); this._spawnEnemyA(3); this._spawnEnemyC(1); }
+    if (t >= 14000 && !this._wavesTriggered.has(5))  { this._wavesTriggered.add(5);  console.log('[WAVE] 5 — EnemyB x4 + EnemyC x2'); this._spawnEnemyB(4); this._spawnEnemyC(2); }
+    if (t >= 17000 && !this._wavesTriggered.has(6))  {
+      this._wavesTriggered.add(6);
+      console.log('[WAVE] 6 — EnemyA x4 + EnemyB x3 (slow scroll)');
+      this._spawnEnemyA(4);
+      this._spawnEnemyB(3);
+      this._bgScrollSpeed = 0.3;
+    }
+
+    // ── Boss entrance (20s) ───────────────────────────────────────────────────
+    if (t >= 20000 && !this._wavesTriggered.has(7)) {
+      this._wavesTriggered.add(7);
+      console.log('[WAVE] 7 — BOSS ENTERS');
+      this._scrollLocked = true;
+      this._bgScrollSpeed = 0;
+      this._spawnBoss();
+    }
+  }
+
+  _spawnEnemyA(count) {
+    const W = this._W, H = this._H;
+    const spacing = 80;
+    const startY = Phaser.Math.Between(120, H - 120);
+    for (let i = 0; i < count; i++) {
+      const y = startY + i * spacing;
+      const e = new EnemyA(this, W + 40, Phaser.Math.Clamp(y, 60, H - 60));
+      e.enemyBullets = this.enemyBullets;
+      e._player = this.player;
+      this.enemiesA.push(e);
+      this._registerEnemyA(e);
+    }
+  }
+
+  _spawnEnemyB(count) {
+    const W = this._W, H = this._H;
+    const rows = Math.ceil(count / 2);
+    let spawned = 0;
+    for (let row = 0; row < rows && spawned < count; row++) {
+      const cols = Math.min(2, count - spawned);
+      for (let col = 0; col < cols; col++) {
+        const y = H / 2 - ((rows - 1) * 50) / 2 + row * 50;
+        const x = W + 40 + col * 36;
+        const e = new EnemyB(this, x, Phaser.Math.Clamp(y, 60, H - 60));
+        e._player = this.player;
+        this.enemiesB.push(e);
+        this._registerEnemyB(e);
+        spawned++;
+      }
+    }
+  }
+
+  _spawnEnemyC(count) {
+    const W = this._W, H = this._H;
+    const spacing = 90;
+    const startY = Phaser.Math.Between(100, H - 100);
+    for (let i = 0; i < count; i++) {
+      const y = Phaser.Math.Clamp(startY + i * spacing, 60, H - 60);
+      const e = new EnemyC(this, W + 60 + i * 50, y);
+      e.enemyBullets = this.enemyBullets;
+      e._player = this.player;
+      this.enemiesC.push(e);
+      this._registerEnemyC(e);
+    }
+  }
+
+  _spawnBoss() {
+    const W = this._W, H = this._H;
+    this._bossActive = true;
+    const b = new Boss(this, W + 80, H / 2);
+    b._player = this.player;
+    b.spreadBullets = this.spreadBullets;
+    b.aimedBullets = this.aimedBullets;
+    this.boss = b;
+    this._registerBoss(b);
+
+    // Slide boss onto screen
+    this.tweens.add({
+      targets: b.sprite,
+      x: W - 100,
+      duration: 2000,
+      ease: 'Power2',
+      onUpdate: () => {
+        b._syncBody();
+      },
+      onComplete: () => {
+        b._syncBody();
+        b.homeX = b.sprite.x;
+        b.homeY = b.sprite.y;
+        b.behaviorTimer = 1800; // short delay before first attack
+      }
+    });
+
+    // Show boss HP bar
+    this.game.events.emit('bossEntered', b.hp, b.maxHp);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // DEATH & WIN
+  // ─────────────────────────────────────────────────────────────────────────────
+  _killPlayer() {
+    if (this._gameOver || !this.player.alive) return;
+    this._gameOver = true;
+    this.player.die();
+    this.time.delayedCall(600, () => {
+      this.game.events.emit('chargeUpdate', 0);
+      this.scene.stop('UIScene');
+      this.scene.start('GameOverScene');
+    });
+  }
+
+  _onBossDefeated() {
+    if (this._gameOver) return;
+    this._gameOver = true;
+    this.time.delayedCall(800, () => {
+      this.scene.stop('UIScene');
+      this.scene.start('WinScene');
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // UPDATE
+  // ─────────────────────────────────────────────────────────────────────────────
+  update(time, delta) {
+    if (this._gameOver) return;
+
+    this._gameTime += delta;
+
+    // Scrolling star background
+    this._drawStars(delta);
+
+    // Wave spawner
+    this._checkWaves();
+
+    // Player
+    this.player.update(time, delta);
+
+    // Enemies A
+    for (const e of this.enemiesA) {
+      if (e.alive) e.update(time, delta);
+    }
+
+    // Enemies B
+    for (const e of this.enemiesB) {
+      if (e.alive) e.update(time, delta);
+    }
+
+    // Enemies C
+    for (const e of this.enemiesC) {
+      if (e.alive) e.update(time, delta);
+    }
+
+    // Boss
+    if (this.boss && this.boss.alive) {
+      this.boss.update(time, delta);
+    }
+
+    // Recycle off-screen bullets
+    this._cullBullets(this.normalBullets);
+    this._cullBullets(this.chargedBullets);
+    this._cullBullets(this.enemyBullets);
+    this._cullBullets(this.spreadBullets);
+    this._cullBullets(this.aimedBullets);
+  }
+
+  _drawStars(delta) {
+    const W = this._W, H = this._H;
+    const g = this._starGfx;
+    g.clear();
+    const speed = this._bgScrollSpeed;
+    for (const s of this._stars) {
+      s.x -= s.speed * speed;
+      if (s.x < 0) {
+        s.x = W + s.size;
+        s.y = Phaser.Math.Between(0, H);
+      }
+      g.fillStyle(0xffffff, s.alpha);
+      g.fillRect(s.x, s.y, s.size, s.size);
+    }
+  }
+
+  _cullBullets(group) {
+    const W = this._W, H = this._H;
+    group.getChildren().forEach(b => {
+      if (!b.active) return;
+      if (b.x > W + 40 || b.x < -40 || b.y > H + 40 || b.y < -40) {
+        this._recycleBullet(b);
+      }
+    });
+  }
+}
