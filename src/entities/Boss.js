@@ -4,11 +4,12 @@ import { bossExplosion } from '../utils/particles.js';
 /**
  * Boss — 4-pattern ranged-only attack cycle
  *
- * Patterns (cycle 0→3, repeat):
- *   0  Spread Fan   — wide fan of projectiles
- *   1  Aimed Burst  — rapid successive aimed shots at the player
- *   2  Ring Shot    — full 360° ring of bullets
+ * Patterns (cycle 0→4, repeat):
+ *   0  Spread Fan    — wide fan of projectiles
+ *   1  Aimed Burst   — rapid successive aimed shots at the player
+ *   2  Ring Shot     — full 360° ring of bullets
  *   3  Laser Barrage — tight cluster of fast beams aimed at player
+ *   4  Charge Beam   — thick sustained energy beam with lightning arcs (like a railgun/hadouken)
  *
  * Phase 2 (≤50% HP): all counts increase, interval drops, visual tint changes.
  * No melee / lunge — purely ranged.
@@ -74,6 +75,19 @@ export class Boss {
     this._laserRemain   = 0;
     this._laserTimer    = 0;
     this._laserInterval = 120; // ms between individual laser shots
+
+    // Charge beam sub-state
+    this._chargeActive      = false;
+    this._chargePhase       = 'windup'; // 'windup' | 'firing' | 'cooldown'
+    this._chargeTimer       = 0;
+    this._chargeWindupMs    = 600;  // telegraph delay before beam fires
+    this._chargeDurationMs  = 1400; // how long beam streams out
+    this._chargeCooldownMs  = 400;
+    this._chargeTickTimer   = 0;
+    this._chargeTickInterval = 55;  // ms between each beam-segment spawn
+    this._chargeAimAngle    = 0;    // locked at windup
+    // Visual: winding-up glow orbs at boss muzzle
+    this._chargeGlowOrbs    = [];
   }
 
   _ensureTexture(scene, key, w, h, color) {
@@ -106,13 +120,14 @@ export class Boss {
     // Tick sub-state timers for multi-shot patterns
     this._tickBurst(delta);
     this._tickLaser(delta);
+    this._tickChargeBeam(delta);
 
     // Main pattern timer — only advance when no sub-state is running
-    if (!this._burstActive && !this._laserActive) {
+    if (!this._burstActive && !this._laserActive && !this._chargeActive) {
       this.behaviorTimer -= delta;
       if (this.behaviorTimer <= 0) {
         this._executeBehavior();
-        this.behaviorIndex    = (this.behaviorIndex + 1) % 4;
+        this.behaviorIndex    = (this.behaviorIndex + 1) % 5;
         this.behaviorTimer    = this.behaviorInterval;
       }
     }
@@ -121,10 +136,11 @@ export class Boss {
   // ── Pattern dispatcher ──────────────────────────────────────────────────────
   _executeBehavior() {
     switch (this.behaviorIndex) {
-      case 0: this._spreadFan();    break;
-      case 1: this._startAimedBurst(); break;
-      case 2: this._ringShot();     break;
-      case 3: this._startLaserBarrage(); break;
+      case 0: this._spreadFan();           break;
+      case 1: this._startAimedBurst();     break;
+      case 2: this._ringShot();            break;
+      case 3: this._startLaserBarrage();   break;
+      case 4: this._startChargeBeam();     break;
     }
   }
 
@@ -272,7 +288,158 @@ export class Boss {
     }
   }
 
-  _ensureLaserTex() {
+  // ── Pattern 4: Charge Beam ──────────────────────────────────────────────────
+  // A thick sustained energy beam — bright white core with yellow glow + lightning arcs.
+  // Phase: windup (glow orbs appear) → firing (dense stream of wide beams) → cooldown.
+  _startChargeBeam() {
+    if (!this.aimedBullets || !this._player || !this._player.alive) return;
+    this._chargeActive    = true;
+    this._chargePhase     = 'windup';
+    this._chargeTimer     = 0;
+    this._chargeTickTimer = 0;
+
+    // Lock aim angle at the player's current position during windup
+    this._chargeAimAngle = Phaser.Math.Angle.Between(
+      this.sprite.x, this.sprite.y,
+      this._player.x, this._player.y
+    );
+
+    // Spawn growing glow orbs at muzzle to telegraph the beam
+    this._spawnChargeWindup();
+  }
+
+  _spawnChargeWindup() {
+    // Small glowing circles that pulse and grow at the boss's left edge
+    const mx = this.sprite.x - SPRITES.boss.width / 2;
+    const my = this.sprite.y;
+    const count = this._enraged ? 5 : 3;
+    for (let i = 0; i < count; i++) {
+      const delay = i * (this._chargeWindupMs / count);
+      this.scene.time.delayedCall(delay, () => {
+        if (!this.alive || !this._chargeActive) return;
+        const orb = this.scene.add.circle(mx, my, 6 + i * 4, 0xffff00, 0.9);
+        orb.setDepth(9);
+        this._chargeGlowOrbs.push(orb);
+        this.scene.tweens.add({
+          targets: orb,
+          scaleX: 2.5,
+          scaleY: 2.5,
+          alpha: 0,
+          duration: this._chargeWindupMs,
+          ease: 'Quad.easeIn',
+          onComplete: () => orb.destroy(),
+        });
+      });
+    }
+  }
+
+  _tickChargeBeam(delta) {
+    if (!this._chargeActive) return;
+    this._chargeTimer += delta;
+
+    if (this._chargePhase === 'windup') {
+      if (this._chargeTimer >= this._chargeWindupMs) {
+        this._chargePhase = 'firing';
+        this._chargeTimer = 0;
+        this._chargeTickTimer = 0;
+        this._ensureChargeBeamTextures();
+      }
+      return;
+    }
+
+    if (this._chargePhase === 'firing') {
+      this._chargeTickTimer -= delta;
+      if (this._chargeTickTimer <= 0) {
+        this._fireChargeBeamTick();
+        this._chargeTickTimer = this._chargeTickInterval;
+      }
+      if (this._chargeTimer >= this._chargeDurationMs) {
+        this._chargePhase = 'cooldown';
+        this._chargeTimer = 0;
+      }
+      return;
+    }
+
+    if (this._chargePhase === 'cooldown') {
+      if (this._chargeTimer >= this._chargeCooldownMs) {
+        this._chargeActive = false;
+        this.behaviorTimer = this.behaviorInterval;
+      }
+    }
+  }
+
+  _fireChargeBeamTick() {
+    if (!this.aimedBullets) return;
+    const mx = this.sprite.x - SPRITES.boss.width / 2;
+    const my = this.sprite.y;
+
+    // Fire the thick core beam (white/bright)
+    const coreCount = this._enraged ? 4 : 3;
+    for (let i = 0; i < coreCount; i++) {
+      // Small angular jitter for each core beam to give beam volume
+      const jitter = Phaser.Math.FloatBetween(-0.04, 0.04);
+      const angle  = this._chargeAimAngle + jitter;
+      const speed  = this._enraged ? 680 : 560;
+      const b = this.aimedBullets.get(mx, my, 'boss_beam_core_tex');
+      if (!b) continue;
+      b.setActive(true).setVisible(true).setDepth(10);
+      b.body.setEnable(true);
+      b.body.reset(mx, my);
+      b.setRotation(angle);
+      b.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+    }
+
+    // Fire lightning arc tendrils (yellow, thinner, wider jitter)
+    const arcCount = this._enraged ? 4 : 3;
+    for (let i = 0; i < arcCount; i++) {
+      const jitter = Phaser.Math.FloatBetween(-0.18, 0.18);
+      const angle  = this._chargeAimAngle + jitter;
+      const speed  = this._enraged ? 600 : 480;
+      const b = this.aimedBullets.get(mx, my, 'boss_beam_arc_tex');
+      if (!b) continue;
+      b.setActive(true).setVisible(true).setDepth(9);
+      b.body.setEnable(true);
+      b.body.reset(mx, my);
+      b.setRotation(angle);
+      b.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+    }
+  }
+
+  _ensureChargeBeamTextures() {
+    // Core beam: thick white-yellow gradient bar
+    if (!this.scene.textures.exists('boss_beam_core_tex')) {
+      const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+      // Outer yellow glow
+      g.fillStyle(0xffee00, 0.6);
+      g.fillRect(0, 0, 48, 18);
+      // Inner bright yellow
+      g.fillStyle(0xffff88, 0.85);
+      g.fillRect(0, 3, 48, 12);
+      // White hot core
+      g.fillStyle(0xffffff, 1);
+      g.fillRect(0, 6, 48, 6);
+      g.generateTexture('boss_beam_core_tex', 48, 18);
+      g.destroy();
+    }
+
+    // Arc tendril: thinner jagged yellow lightning look
+    if (!this.scene.textures.exists('boss_beam_arc_tex')) {
+      const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+      // Faint outer glow
+      g.fillStyle(0xffcc00, 0.4);
+      g.fillRect(0, 0, 44, 10);
+      // Brighter yellow body
+      g.fillStyle(0xffee44, 0.8);
+      g.fillRect(0, 2, 44, 6);
+      // Bright center
+      g.fillStyle(0xffffcc, 0.9);
+      g.fillRect(0, 4, 44, 2);
+      g.generateTexture('boss_beam_arc_tex', 44, 10);
+      g.destroy();
+    }
+  }
+
+  // ── Laser Barrage ────────────────────────────────────────────────────────────
     if (!this.scene.textures.exists('boss_laser_tex')) {
       const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
       g.fillStyle(0x00ffff, 1);   // cyan laser core
@@ -319,9 +486,11 @@ export class Boss {
 
   _enrage() {
     this._enraged = true;
-    this.behaviorInterval = 1400; // faster attack cadence
-    this._burstInterval   = 130;  // quicker burst
-    this._laserInterval   = 90;   // quicker laser
+    this.behaviorInterval    = 1400; // faster attack cadence
+    this._burstInterval      = 130;  // quicker burst
+    this._laserInterval      = 90;   // quicker laser
+    this._chargeWindupMs     = 450;  // shorter telegraph
+    this._chargeTickInterval = 40;   // denser beam stream
 
     // Rapid red-flash to signal phase transition
     let flashes = 0;

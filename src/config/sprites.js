@@ -43,7 +43,7 @@ export const SPRITES = {
   },
   boss: {
     width: 240,
-    height: 180,
+    height: 360,
     color: 0x222244,
   },
   bossBulletSpread: {
