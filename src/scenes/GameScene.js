@@ -229,7 +229,17 @@ export class GameScene extends Phaser.Scene {
       this._spawnBoss();
     });
 
-    bar.append(label, btnClear, btnBoss);
+    const btnKillBoss = mkBtn('Kill Boss', () => {
+      if (!this.boss || !this.boss.alive) {
+        console.log('[DEV] No active boss to kill');
+        return;
+      }
+      console.log('[DEV] Killing boss');
+      this.boss.hp = 0;
+      this.boss._die();
+    });
+
+    bar.append(label, btnClear, btnBoss, btnKillBoss);
     document.body.appendChild(bar);
 
     // Auto-remove toolbar when scene shuts down
@@ -721,34 +731,22 @@ export class GameScene extends Phaser.Scene {
       if (!this.scene.isActive()) return;
       const playerSprite = this.player.sprite;
 
-      // Park player at left edge, vertically centered, invisible
-      playerSprite.setActive(true).setVisible(true);
-      playerSprite.setAlpha(0);
-      playerSprite.x = -80;
-      playerSprite.y = H / 2;
+      // Keep the ship exactly where it is — just make sure it's visible and frozen
+      playerSprite.setActive(true).setVisible(true).setAlpha(1);
       if (playerSprite.body) {
         playerSprite.body.setVelocity(0, 0);
         playerSprite.body.setEnable(false);
       }
+      if (this.textures.exists('spaceship-default')) {
+        playerSprite.setTexture('spaceship-default');
+      }
 
-      // Fade in then fly across
+      // Fly from current position off the right edge
       this.tweens.add({
         targets: playerSprite,
-        alpha: 1,
-        duration: 200,
-        ease: 'Linear',
-        onComplete: () => {
-          // Use 'spaceship-default' texture for clean look
-          if (this.textures.exists('spaceship-default')) {
-            playerSprite.setTexture('spaceship-default');
-          }
-          this.tweens.add({
-            targets: playerSprite,
-            x: W + 120,
-            duration: 1400,
-            ease: 'Quad.easeIn',
-          });
-        },
+        x: W + 120,
+        duration: 1400,
+        ease: 'Quad.easeIn',
       });
     });
 

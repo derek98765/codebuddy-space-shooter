@@ -29,16 +29,17 @@ export class WinScene extends Phaser.Scene {
       .setDepth(2);
 
     // Final score
-    this.add.text(W / 2, titleY + titleH / 2 + 24, 'SCORE  ' + this._score, {
+    const scoreY = titleY + titleH / 2 + 48;
+    this.add.text(W / 2, scoreY, 'SCORE  ' + this._score, {
       fontSize: '20px',
       fontFamily: 'monospace',
       color: '#44ffaa',
     }).setOrigin(0.5, 0.5).setDepth(2);
 
     // Play Again button
-    const btnW = Math.min(W * 0.28, 240);
+    const btnW = Math.min(W * 0.28, 240) * 1.25;
     const btnH = btnW * (564 / 1586);
-    const btnY  = titleY + titleH / 2 + 70;
+    const btnY  = scoreY + 64;
     const playBtn = this.add.image(W / 2, btnY, 'play-again-btn')
       .setDisplaySize(btnW, btnH)
       .setOrigin(0.5, 0.5)
