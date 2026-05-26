@@ -3,6 +3,7 @@ import { GameScene } from './scenes/GameScene.js';
 import { UIScene } from './scenes/UIScene.js';
 import { GameOverScene } from './scenes/GameOverScene.js';
 import { WinScene } from './scenes/WinScene.js';
+import { PauseScene } from './scenes/PauseScene.js';
 
 export const SCENE_KEYS = {
   START: 'StartScene',
@@ -10,6 +11,7 @@ export const SCENE_KEYS = {
   UI: 'UIScene',
   GAME_OVER: 'GameOverScene',
   WIN: 'WinScene',
+  PAUSE: 'PauseScene',
 };
 
 const config = {
@@ -27,7 +29,7 @@ const config = {
       debug: false,
     },
   },
-  scene: [StartScene, GameScene, UIScene, GameOverScene, WinScene],
+  scene: [StartScene, GameScene, UIScene, GameOverScene, WinScene, PauseScene],
 };
 
 new Phaser.Game(config);

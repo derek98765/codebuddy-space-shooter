@@ -105,6 +105,10 @@ export class GameScene extends Phaser.Scene {
     // ── Launch UIScene in parallel ────────────────────────────────────────────
     this.scene.launch('UIScene');
 
+    // ── Pause on ESC ──────────────────────────────────────────────────────────
+    this._escKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+    this._paused = false;
+
     // ── Dev toolbar ───────────────────────────────────────────────────────────
     this._initDevToolbar();
   }
@@ -571,6 +575,14 @@ export class GameScene extends Phaser.Scene {
   // ─────────────────────────────────────────────────────────────────────────────
   update(time, delta) {
     if (this._gameOver) return;
+
+    // ── Pause toggle ──────────────────────────────────────────────────────────
+    if (Phaser.Input.Keyboard.JustDown(this._escKey)) {
+      this.scene.pause();
+      this.scene.pause('UIScene');
+      this.scene.launch('PauseScene');
+      return;
+    }
 
     this._gameTime += delta;
 
