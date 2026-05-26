@@ -42,8 +42,8 @@ export class Boss {
     this.sprite.body.moves = false;
     this.sprite.body.setAllowGravity(false);
 
-    this.hp    = 60;
-    this.maxHp = 60;
+    this.hp    = 300;
+    this.maxHp = 300;
     this.alive = true;
 
     this.behaviorIndex    = 0;     // cycles 0–3

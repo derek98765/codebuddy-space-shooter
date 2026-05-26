@@ -64,6 +64,18 @@ export class WinScene extends Phaser.Scene {
       this.scene.stop();
     });
 
+    // Keyboard: Space or Enter to play again
+    const restart = () => { this.scene.start('StartScene'); this.scene.stop(); };
+    this.input.keyboard.once('keydown-SPACE', restart);
+    this.input.keyboard.once('keydown-ENTER', restart);
+
+    // Hint text
+    this.add.text(W / 2, H / 2 + 128, 'or press SPACE / ENTER', {
+      fontSize: '12px',
+      fontFamily: 'monospace',
+      color: '#337755',
+    }).setOrigin(0.5, 0.5).setDepth(2);
+
     // Star particles (simple twinkling rects)
     const gfx = this.add.graphics().setDepth(1);
     const stars = [];
