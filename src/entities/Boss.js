@@ -67,9 +67,13 @@ export class Boss {
 
     this.behaviorIndex    = 0;     // cycles 0–4
     this.behaviorTimer    = 99999; // entrance tween sets the real first delay
-    this.behaviorInterval = 2000;  // ms between attacks (Phase 1)
+    this.behaviorInterval = 900;   // ms between pattern triggers (Phase 1)
 
     this._enraged = false;
+
+    // Continuous background spray — fires independently on its own timer
+    this._sprayTimer    = 0;
+    this._sprayInterval = 700; // ms between background spray volleys (Phase 1)
 
     this.homeX = x;
     this.homeY = y;
@@ -86,23 +90,23 @@ export class Boss {
     this._burstActive   = false;
     this._burstRemain   = 0;
     this._burstTimer    = 0;
-    this._burstInterval = 180; // ms between individual burst shots
+    this._burstInterval = 100; // ms between individual burst shots
 
     // Laser barrage sub-state
     this._laserActive   = false;
     this._laserRemain   = 0;
     this._laserTimer    = 0;
-    this._laserInterval = 120; // ms between individual laser shots
+    this._laserInterval = 70; // ms between individual laser shots
 
     // Charge beam sub-state
     this._chargeActive       = false;
     this._chargePhase        = 'windup'; // 'windup' | 'firing' | 'cooldown'
     this._chargeTimer        = 0;
-    this._chargeWindupMs     = 600;  // telegraph delay before beam fires
+    this._chargeWindupMs     = 400;  // telegraph delay before beam fires
     this._chargeDurationMs   = 1400; // how long beam streams out
     this._chargeCooldownMs   = 400;
     this._chargeTickTimer    = 0;
-    this._chargeTickInterval = 55;   // ms between each beam-segment spawn
+    this._chargeTickInterval = 40;   // ms between each beam-segment spawn
     this._chargeAimAngle     = 0;    // locked at windup
     this._chargeGlowOrbs     = [];
   }
@@ -200,14 +204,19 @@ export class Boss {
     this._tickLaser(delta);
     this._tickChargeBeam(delta);
 
-    // Main pattern timer — only advance when no sub-state is running
-    if (!this._burstActive && !this._laserActive && !this._chargeActive) {
-      this.behaviorTimer -= delta;
-      if (this.behaviorTimer <= 0) {
-        this._executeBehavior();
-        this.behaviorIndex = (this.behaviorIndex + 1) % 5;
-        this.behaviorTimer = this.behaviorInterval;
-      }
+    // Background spray — always firing, independent of pattern state
+    this._sprayTimer -= delta;
+    if (this._sprayTimer <= 0) {
+      this._fireBackgroundSpray();
+      this._sprayTimer = this._sprayInterval;
+    }
+
+    // Main pattern timer — always advances (no mutual-exclusion block)
+    this.behaviorTimer -= delta;
+    if (this.behaviorTimer <= 0) {
+      this._executeBehavior();
+      this.behaviorIndex = (this.behaviorIndex + 1) % 5;
+      this.behaviorTimer = this.behaviorInterval;
     }
   }
 
@@ -222,6 +231,35 @@ export class Boss {
     }
   }
 
+  // ── Background spray (always-on) ───────────────────────────────────────────
+  _fireBackgroundSpray() {
+    if (!this.spreadBullets || !this._player || !this._player.alive) return;
+    const cfg    = SPRITES.bossBulletSpread;
+    const texKey = this._spreadTexKey();
+    if (texKey === 'boss_spread_tex') this._ensureBulletTex(texKey, cfg.width, cfg.height, cfg.color);
+
+    const count    = this._enraged ? 5 : 3;
+    const halfSpan = 25;
+    const speed    = this._enraged ? 310 : 260;
+
+    // Aim toward the player with a spread around the aim angle
+    const baseAngle = Phaser.Math.Angle.Between(
+      this.sprite.x, this.sprite.y, this._player.x, this._player.y
+    );
+
+    for (let i = 0; i < count; i++) {
+      const offset = count === 1 ? 0 : -halfSpan + (i / (count - 1)) * halfSpan * 2;
+      const angle  = baseAngle + Phaser.Math.DegToRad(offset);
+      const b = this.spreadBullets.get(this.sprite.x, this.sprite.y, texKey);
+      if (!b) continue;
+      b.setActive(true).setVisible(true).setDepth(7);
+      b.setDisplaySize(18, 18);
+      b.body.setEnable(true);
+      b.body.reset(this.sprite.x, this.sprite.y);
+      b.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+    }
+  }
+
   // ── Pattern 0: Spread Fan ───────────────────────────────────────────────────
   _spreadFan() {
     if (!this.spreadBullets) return;
@@ -229,28 +267,38 @@ export class Boss {
     const texKey = this._spreadTexKey();
     if (texKey === 'boss_spread_tex') this._ensureBulletTex(texKey, cfg.width, cfg.height, cfg.color);
 
-    const count    = this._enraged ? 7 : 4;
-    const halfSpan = this._enraged ? 40 : 35;
-    const speed    = this._enraged ? 300 : 260;
+    const count    = this._enraged ? 13 : 9;
+    const halfSpan = this._enraged ? 60 : 55;
+    const speed    = this._enraged ? 400 : 340;
 
-    for (let i = 0; i < count; i++) {
-      const deg = -halfSpan + (i / (count - 1)) * (halfSpan * 2);
-      const rad = Phaser.Math.DegToRad(180 + deg);
-      const b = this.spreadBullets.get(this.sprite.x, this.sprite.y, texKey);
-      if (!b) continue;
-      b.setActive(true).setVisible(true).setDepth(7);
-      b.setDisplaySize(22, 22);
-      b.body.setEnable(true);
-      b.body.reset(this.sprite.x, this.sprite.y);
-      b.setVelocity(Math.cos(rad) * speed, Math.sin(rad) * speed);
-    }
+    const fireWave = (angleOffset) => {
+      for (let i = 0; i < count; i++) {
+        const deg = -halfSpan + (i / (count - 1)) * (halfSpan * 2);
+        const rad = Phaser.Math.DegToRad(180 + deg + angleOffset);
+        const b = this.spreadBullets.get(this.sprite.x, this.sprite.y, texKey);
+        if (!b) continue;
+        b.setActive(true).setVisible(true).setDepth(7);
+        b.setDisplaySize(22, 22);
+        b.body.setEnable(true);
+        b.body.reset(this.sprite.x, this.sprite.y);
+        b.setVelocity(Math.cos(rad) * speed, Math.sin(rad) * speed);
+      }
+    };
+
+    // First wave immediately
+    fireWave(0);
+    // Second wave staggered 200ms later, rotated slightly
+    this.scene.time.delayedCall(200, () => {
+      if (!this.alive) return;
+      fireWave(this._enraged ? 10 : 8);
+    });
   }
 
   // ── Pattern 1: Aimed Burst ──────────────────────────────────────────────────
   _startAimedBurst() {
     if (!this.aimedBullets || !this._player || !this._player.alive) return;
     this._burstActive = true;
-    this._burstRemain = this._enraged ? 5 : 3;
+    this._burstRemain = this._enraged ? 8 : 5;
     this._burstTimer  = 0;
   }
 
@@ -275,18 +323,23 @@ export class Boss {
     const texKey = this._aimedTexKey();
     if (texKey === 'boss_aimed_tex') this._ensureBulletTex(texKey, cfg.width, cfg.height, cfg.color);
 
-    const angle = Phaser.Math.Angle.Between(
+    const baseAngle = Phaser.Math.Angle.Between(
       this.sprite.x, this.sprite.y,
       this._player.x, this._player.y
     );
-    const b = this.aimedBullets.get(this.sprite.x, this.sprite.y, texKey);
-    if (!b) return;
-    b.setActive(true).setVisible(true).setDepth(7);
-    b.setDisplaySize(26, 26).setRotation(angle);
-    b.body.setEnable(true);
-    b.body.reset(this.sprite.x, this.sprite.y);
-    const speed = this._enraged ? 300 : 240;
-    b.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+    const speed      = this._enraged ? 400 : 320;
+    // Fire 3 shots per burst event: centre + two flanking at ±10°
+    const offsets    = this._enraged ? [-14, -7, 0, 7, 14] : [-10, 0, 10];
+    for (const deg of offsets) {
+      const angle = baseAngle + Phaser.Math.DegToRad(deg);
+      const b = this.aimedBullets.get(this.sprite.x, this.sprite.y, texKey);
+      if (!b) continue;
+      b.setActive(true).setVisible(true).setDepth(7);
+      b.setDisplaySize(26, 26).setRotation(angle);
+      b.body.setEnable(true);
+      b.body.reset(this.sprite.x, this.sprite.y);
+      b.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+    }
   }
 
   // ── Pattern 2: Ring Shot ────────────────────────────────────────────────────
@@ -296,26 +349,37 @@ export class Boss {
     const texKey = this._spreadTexKey();
     if (texKey === 'boss_spread_tex') this._ensureBulletTex(texKey, cfg.width, cfg.height, cfg.color);
 
-    const count = this._enraged ? 16 : 12;
-    const speed = this._enraged ? 220 : 180;
+    const count       = this._enraged ? 24 : 18;
+    const innerSpeed  = this._enraged ? 200 : 160;
+    const outerSpeed  = this._enraged ? 340 : 280;
 
-    for (let i = 0; i < count; i++) {
-      const rad = Phaser.Math.DegToRad((360 / count) * i);
-      const b = this.spreadBullets.get(this.sprite.x, this.sprite.y, texKey);
-      if (!b) continue;
-      b.setActive(true).setVisible(true).setDepth(7);
-      b.setDisplaySize(22, 22);
-      b.body.setEnable(true);
-      b.body.reset(this.sprite.x, this.sprite.y);
-      b.setVelocity(Math.cos(rad) * speed, Math.sin(rad) * speed);
-    }
+    const fireRing = (speed, rotOffset) => {
+      for (let i = 0; i < count; i++) {
+        const rad = Phaser.Math.DegToRad((360 / count) * i + rotOffset);
+        const b = this.spreadBullets.get(this.sprite.x, this.sprite.y, texKey);
+        if (!b) continue;
+        b.setActive(true).setVisible(true).setDepth(7);
+        b.setDisplaySize(22, 22);
+        b.body.setEnable(true);
+        b.body.reset(this.sprite.x, this.sprite.y);
+        b.setVelocity(Math.cos(rad) * speed, Math.sin(rad) * speed);
+      }
+    };
+
+    // Inner ring immediately
+    fireRing(innerSpeed, 0);
+    // Outer ring 150ms later, rotated half a sector for gap-filling
+    this.scene.time.delayedCall(150, () => {
+      if (!this.alive) return;
+      fireRing(outerSpeed, 360 / count / 2);
+    });
   }
 
   // ── Pattern 3: Laser Barrage ────────────────────────────────────────────────
   _startLaserBarrage() {
     if (!this.aimedBullets || !this._player || !this._player.alive) return;
     this._laserActive = true;
-    this._laserRemain = this._enraged ? 5 : 3;
+    this._laserRemain = this._enraged ? 8 : 5;
     this._laserTimer  = 0;
   }
 
@@ -345,9 +409,9 @@ export class Boss {
       ? this._player.y + this._player.sprite.body.velocity.y * 0.08
       : this._player.y;
 
-    const spreadCount = this._enraged ? 3 : 2;
-    const halfDeg     = this._enraged ? 6 : 4;
-    const speed       = this._enraged ? 520 : 440;
+    const spreadCount = this._enraged ? 5 : 4;
+    const halfDeg     = this._enraged ? 12 : 9;
+    const speed       = this._enraged ? 650 : 540;
 
     const baseAngle = Phaser.Math.Angle.Between(
       this.sprite.x, this.sprite.y, px, py
@@ -451,7 +515,7 @@ export class Boss {
     for (let i = 0; i < coreCount; i++) {
       const jitter = Phaser.Math.FloatBetween(-0.04, 0.04);
       const angle  = this._chargeAimAngle + jitter;
-      const speed  = this._enraged ? 680 : 560;
+      const speed  = this._enraged ? 800 : 640;
       const b = this.aimedBullets.get(mx, my, this._beamCoreTexKey());
       if (!b) continue;
       b.setActive(true).setVisible(true).setDepth(10);
@@ -466,7 +530,7 @@ export class Boss {
     for (let i = 0; i < arcCount; i++) {
       const jitter = Phaser.Math.FloatBetween(-0.18, 0.18);
       const angle  = this._chargeAimAngle + jitter;
-      const speed  = this._enraged ? 600 : 480;
+      const speed  = this._enraged ? 700 : 560;
       const b = this.aimedBullets.get(mx, my, this._beamArcTexKey());
       if (!b) continue;
       b.setActive(true).setVisible(true).setDepth(9);
@@ -498,11 +562,12 @@ export class Boss {
 
   _enrage() {
     this._enraged = true;
-    this.behaviorInterval    = 1400;
-    this._burstInterval      = 130;
-    this._laserInterval      = 90;
-    this._chargeWindupMs     = 450;
-    this._chargeTickInterval = 40;
+    this.behaviorInterval = 600;
+    this._sprayInterval   = 400;
+    this._burstInterval   = 65;
+    this._laserInterval   = 45;
+    this._chargeWindupMs     = 280;
+    this._chargeTickInterval = 25;
 
     let flashes = 0;
     const flashInterval = this.scene.time.addEvent({

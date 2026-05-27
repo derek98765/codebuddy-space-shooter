@@ -1,7 +1,7 @@
 import { SPRITES } from '../config/sprites.js';
 import { createEngineTrail } from '../utils/particles.js';
 
-export const PLAYER_SPEED = 253;
+export const PLAYER_SPEED = 291;
 
 export class Player {
   /**
@@ -24,6 +24,9 @@ export class Player {
     }
     this.sprite.setCollideWorldBounds(true);
     this.sprite.setDepth(10);
+
+    // Reduce hitbox to 90% of display size
+    this.sprite.body.setSize(cfg.width * 0.9, cfg.height * 0.9);
 
     // Input — WASD movement, J fire
     this.keyW = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);

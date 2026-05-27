@@ -618,7 +618,7 @@ export class GameScene extends Phaser.Scene {
         b._syncBody();
         b.homeX = b.sprite.x;
         b.homeY = b.sprite.y;
-        b.behaviorTimer = 1800; // short delay before first attack
+        b.behaviorTimer = 600; // short delay before first attack
       }
     });
 
