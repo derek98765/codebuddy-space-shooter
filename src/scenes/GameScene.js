@@ -449,28 +449,28 @@ export class GameScene extends Phaser.Scene {
   _checkWaves() {
     const t = this._gameTime;
 
-    // ── Phase 1: Opening (0–30s) ──────────────────────────────────────────────
+    // ── Phase 1: Opening (0–20s) ──────────────────────────────────────────────
     if (t >= 2000  && !this._wavesTriggered.has(1))  { this._wavesTriggered.add(1);  this._spawnEnemyA(3); }
-    if (t >= 6000  && !this._wavesTriggered.has(2))  { this._wavesTriggered.add(2);  this._spawnEnemyA(3); this._spawnEnemyB(2); }
-    if (t >= 11000 && !this._wavesTriggered.has(3))  { this._wavesTriggered.add(3);  this._spawnEnemyB(4); }
-    if (t >= 16000 && !this._wavesTriggered.has(4))  { this._wavesTriggered.add(4);  this._spawnEnemyA(3); this._spawnEnemyC(1); }
-    if (t >= 21000 && !this._wavesTriggered.has(5))  { this._wavesTriggered.add(5);  this._spawnEnemyB(4); this._spawnEnemyC(2); }
-    if (t >= 27000 && !this._wavesTriggered.has(6))  { this._wavesTriggered.add(6);  this._spawnEnemyA(4); this._spawnEnemyB(3); }
+    if (t >= 5000  && !this._wavesTriggered.has(2))  { this._wavesTriggered.add(2);  this._spawnEnemyA(3); this._spawnEnemyB(2); }
+    if (t >= 9000  && !this._wavesTriggered.has(3))  { this._wavesTriggered.add(3);  this._spawnEnemyB(4); }
+    if (t >= 13000 && !this._wavesTriggered.has(4))  { this._wavesTriggered.add(4);  this._spawnEnemyA(3); this._spawnEnemyC(1); }
+    if (t >= 17000 && !this._wavesTriggered.has(5))  { this._wavesTriggered.add(5);  this._spawnEnemyB(4); this._spawnEnemyC(2); }
 
-    // ── Phase 2: Late (30–60s) ────────────────────────────────────────────────
-    if (t >= 33000 && !this._wavesTriggered.has(20)) { this._wavesTriggered.add(20); this._spawnEnemyA(4); this._spawnEnemyC(2); }
-    if (t >= 38000 && !this._wavesTriggered.has(21)) { this._wavesTriggered.add(21); this._spawnEnemyB(5); this._spawnEnemyE(3); }
-    if (t >= 43000 && !this._wavesTriggered.has(22)) { this._wavesTriggered.add(22); this._spawnEnemyA(5); this._spawnEnemyC(2); }
-    if (t >= 48000 && !this._wavesTriggered.has(23)) { this._wavesTriggered.add(23); this._spawnEnemyB(4); this._spawnEnemyC(3); }
-    if (t >= 53000 && !this._wavesTriggered.has(24)) {
-      this._wavesTriggered.add(24);
-      this._spawnEnemyA(5); this._spawnEnemyB(4);
+    // ── Phase 2: Late (20–38s) ────────────────────────────────────────────────
+    if (t >= 22000 && !this._wavesTriggered.has(6))  { this._wavesTriggered.add(6);  this._spawnEnemyA(4); this._spawnEnemyB(3); }
+    if (t >= 26000 && !this._wavesTriggered.has(20)) { this._wavesTriggered.add(20); this._spawnEnemyA(4); this._spawnEnemyC(2); }
+    if (t >= 30000 && !this._wavesTriggered.has(21)) { this._wavesTriggered.add(21); this._spawnEnemyB(5); this._spawnEnemyE(3); }
+    if (t >= 34000 && !this._wavesTriggered.has(22)) {
+      this._wavesTriggered.add(22);
+      this._spawnEnemyA(5); this._spawnEnemyC(2);
       this._bgScrollSpeed = 0.3;
     }
-    if (t >= 58000 && !this._wavesTriggered.has(25)) { this._wavesTriggered.add(25); this._spawnEnemyC(3); this._spawnEnemyE(4); }
+    if (t >= 38000 && !this._wavesTriggered.has(23)) { this._wavesTriggered.add(23); this._spawnEnemyB(4); this._spawnEnemyC(3); this._spawnEnemyE(4); }
 
-    // ── Boss alert (60s) → boss spawns 5s later at 65s ───────────────────────
-    if (t >= 60000 && !this._wavesTriggered.has(7)) {
+    // ── Buffer (38–45s): last wave clears, no new spawns ─────────────────────
+
+    // ── Boss alert (45s) → boss spawns 5s later at 50s ───────────────────────
+    if (t >= 45000 && !this._wavesTriggered.has(7)) {
       this._wavesTriggered.add(7);
       this._scrollLocked = true;
       this._bgScrollSpeed = 0;
@@ -483,37 +483,37 @@ export class GameScene extends Phaser.Scene {
 
     // ── EnemyE Flanker waves ──────────────────────────────────────────────────
     if (t >= 4000  && !this._wavesTriggered.has(11)) { this._wavesTriggered.add(11); this._spawnEnemyE(2); }
-    if (t >= 14000 && !this._wavesTriggered.has(12)) { this._wavesTriggered.add(12); this._spawnEnemyE(3); }
-    if (t >= 26000 && !this._wavesTriggered.has(13)) { this._wavesTriggered.add(13); this._spawnEnemyE(4); }
+    if (t >= 12000 && !this._wavesTriggered.has(12)) { this._wavesTriggered.add(12); this._spawnEnemyE(3); }
+    if (t >= 22000 && !this._wavesTriggered.has(13)) { this._wavesTriggered.add(13); this._spawnEnemyE(4); }
 
-    // ── EnemyD Carrier waves: evenly spread at 10s / 30s / 50s ──────────────
-    if (t >= 10000 && !this._wavesTriggered.has(8)) {
+    // ── EnemyD Carrier waves: evenly spread at 8s / 22s / 36s ───────────────
+    if (t >= 8000  && !this._wavesTriggered.has(8)) {
       this._wavesTriggered.add(8);
       this._spawnEnemyD(1); // drops: spread
     }
-    if (t >= 30000 && !this._wavesTriggered.has(9)) {
+    if (t >= 22000 && !this._wavesTriggered.has(9)) {
       this._wavesTriggered.add(9);
       this._spawnEnemyD(1); // drops: missile
     }
-    if (t >= 50000 && !this._wavesTriggered.has(10)) {
+    if (t >= 36000 && !this._wavesTriggered.has(10)) {
       this._wavesTriggered.add(10);
       this._spawnEnemyD(1); // drops: rapid
     }
 
     // ── Difficulty scaling triggers ───────────────────────────────────────────
-    if (t >= 20000 && !this._wavesTriggered.has('diff-a1')) {
+    if (t >= 15000 && !this._wavesTriggered.has('diff-a1')) {
       this._wavesTriggered.add('diff-a1');
       for (const e of this.enemiesA) { if (e.alive) e.scaleDifficulty(1); }
     }
-    if (t >= 35000 && !this._wavesTriggered.has('diff-b1')) {
+    if (t >= 26000 && !this._wavesTriggered.has('diff-b1')) {
       this._wavesTriggered.add('diff-b1');
       for (const e of this.enemiesB) { if (e.alive) e.scaleDifficulty(1); }
     }
-    if (t >= 45000 && !this._wavesTriggered.has('diff-c1')) {
+    if (t >= 34000 && !this._wavesTriggered.has('diff-c1')) {
       this._wavesTriggered.add('diff-c1');
       for (const e of this.enemiesC) { if (e.alive) e.scaleDifficulty(1); }
     }
-    if (t >= 55000 && !this._wavesTriggered.has('diff-a2')) {
+    if (t >= 40000 && !this._wavesTriggered.has('diff-a2')) {
       this._wavesTriggered.add('diff-a2');
       for (const e of this.enemiesA) { if (e.alive) e.scaleDifficulty(2); }
     }
@@ -530,8 +530,8 @@ export class GameScene extends Phaser.Scene {
       e.enemyBullets = this.enemyBullets;
       e._player = this.player;
       // Apply already-active difficulty tiers
-      if (this._gameTime >= 20000) e.scaleDifficulty(1);
-      if (this._gameTime >= 55000) e.scaleDifficulty(2);
+      if (this._gameTime >= 15000) e.scaleDifficulty(1);
+      if (this._gameTime >= 40000) e.scaleDifficulty(2);
       this.enemiesA.push(e);
       this._registerEnemyA(e);
     }
@@ -549,7 +549,7 @@ export class GameScene extends Phaser.Scene {
         const e = new EnemyB(this, x, Phaser.Math.Clamp(y, 60, H - 60));
         e.scoreValue = 150;
         e._player = this.player;
-        if (this._gameTime >= 35000) e.scaleDifficulty(1);
+        if (this._gameTime >= 26000) e.scaleDifficulty(1);
         this.enemiesB.push(e);
         this._registerEnemyB(e);
         spawned++;
@@ -567,7 +567,7 @@ export class GameScene extends Phaser.Scene {
       e.scoreValue = 200;
       e.enemyBullets = this.enemyBullets;
       e._player = this.player;
-      if (this._gameTime >= 45000) e.scaleDifficulty(1);
+      if (this._gameTime >= 34000) e.scaleDifficulty(1);
       this.enemiesC.push(e);
       this._registerEnemyC(e);
     }
