@@ -22,19 +22,42 @@ export class PauseScene extends Phaser.Scene {
       color: '#ffffff',
     }).setOrigin(0.5).setDepth(1);
 
-    // Subtitle hint
-    this.add.text(W / 2, H / 2 + 10, 'Press ESC or click Resume to continue', {
-      fontSize: '14px',
-      fontFamily: 'monospace',
-      color: '#aaaaaa',
-    }).setOrigin(0.5).setDepth(1);
+    // ── Key controls ──────────────────────────────────────────────────────────
+    const keyH = 44;
+    const wasdW = keyH * (1149 / 315);
+    const jW    = keyH * (285  / 315);
+    const gap   = 40;
+    const totalW = wasdW + gap + jW;
+    const keysX  = W / 2 - totalW / 2;
+    const keysY  = H / 2 + 20;
+
+    if (this.textures.exists('key-wasd')) {
+      this.add.image(keysX + wasdW / 2, keysY, 'key-wasd')
+        .setDisplaySize(wasdW, keyH).setOrigin(0.5, 0.5).setDepth(1).setAlpha(0.85);
+    }
+    this.add.text(keysX + wasdW / 2, keysY - keyH / 2 - 10, 'MOVE', {
+      fontSize: '13px', fontFamily: 'monospace', color: '#cccccc',
+    }).setOrigin(0.5, 1).setDepth(1);
+
+    if (this.textures.exists('key-j')) {
+      this.add.image(keysX + wasdW + gap + jW / 2, keysY, 'key-j')
+        .setDisplaySize(jW, keyH).setOrigin(0.5, 0.5).setDepth(1).setAlpha(0.85);
+    }
+    this.add.text(keysX + wasdW + gap + jW / 2, keysY - keyH / 2 - 10, 'FIRE', {
+      fontSize: '13px', fontFamily: 'monospace', color: '#cccccc',
+    }).setOrigin(0.5, 1).setDepth(1);
+
+    // ESC hint
+    this.add.text(W / 2, keysY + keyH / 2 + 18, 'ESC  — resume', {
+      fontSize: '12px', fontFamily: 'monospace', color: '#888888',
+    }).setOrigin(0.5, 0).setDepth(1);
 
     // Resume button
     const btnW = 180, btnH = 44;
-    const btnBg = this.add.rectangle(W / 2, H / 2 + 70, btnW, btnH, 0x224422)
+    const btnBg = this.add.rectangle(W / 2, keysY + keyH / 2 + 68, btnW, btnH, 0x224422)
       .setInteractive({ useHandCursor: true })
       .setDepth(1);
-    this.add.text(W / 2, H / 2 + 70, 'RESUME', {
+    this.add.text(W / 2, keysY + keyH / 2 + 68, 'RESUME', {
       fontSize: '18px',
       fontFamily: 'monospace',
       fontStyle: 'bold',

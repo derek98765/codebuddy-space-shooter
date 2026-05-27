@@ -61,8 +61,8 @@ export class Boss {
       return img;
     });
 
-    this.hp    = 600;
-    this.maxHp = 600;
+    this.hp    = 900;
+    this.maxHp = 900;
     this.alive = true;
 
     this.behaviorIndex    = 0;     // cycles 0–4

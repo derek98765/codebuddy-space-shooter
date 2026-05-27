@@ -328,11 +328,26 @@ export class Player {
     this._hasMissile = false;
     this._hasRapid   = false;
     this.fireRate    = this._baseFireRate;
-    this.sprite.setActive(false).setVisible(false);
     if (this._engineTrail) {
       this._engineTrail.stop();
     }
     this.game.events.emit('powerUpUpdate', []);
+    this._playDeathAnimation();
+  }
+
+  _playDeathAnimation() {
+    const scene = this.scene;
+    const x = this.sprite.x;
+    const y = this.sprite.y;
+
+    this.sprite.setActive(false).setVisible(false);
+
+    if (!scene.textures.exists('explode')) return;
+
+    const anim = scene.add.sprite(x, y, 'explode', 0);
+    anim.setDisplaySize(220, 220).setDepth(20);
+    anim.play('explode');
+    anim.once('animationcomplete', () => anim.destroy());
   }
 
   destroy() {
