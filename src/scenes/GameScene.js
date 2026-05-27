@@ -14,32 +14,32 @@ export class GameScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image('spaceship-default', 'assets/spaceship-default.png');
-    this.load.image('spaceship-up',      'assets/spaceship-up.png');
-    this.load.image('spaceship-down',    'assets/spaceship-down.png');
-    this.load.image('sky-background',    'assets/sky-background.png');
-    this.load.image('clouds-foreground', 'assets/clouds-foreground.png');
-    this.load.image('boss',              'assets/boss.png');
-    this.load.image('enemy-1',          'assets/enemy-1.png');
-    this.load.image('enemy-2',          'assets/enemy-2.png');
-    this.load.image('enemy-3',          'assets/enemy-3.png');
-    this.load.image('carrier-1',         'assets/carrier-1.png');
-    this.load.image('carrier-2',         'assets/carrier-2.png');
-    this.load.image('carrier-3',         'assets/carrier-3.png');
-    this.load.image('enemy-4',          'assets/enemy-4.png');
-    this.load.image('bullet-1',          'assets/bullet-1.png');
-    this.load.image('bullet-2',          'assets/bullet-2.png');
-    this.load.image('bullet-3',          'assets/bullet-3.png');
-    this.load.image('bullet-4',          'assets/bullet-4.png');
-    this.load.image('bullet-5',          'assets/bullet-5.png');
-    this.load.image('bullet-6',          'assets/bullet-6.png');
-    this.load.image('bullet-7',          'assets/bullet-7.png');
-    this.load.image('bullet-8',          'assets/bullet-8.png');
-    this.load.image('missile',           'assets/misslie.png');
-    this.load.spritesheet('explode', 'assets/explode.png', { frameWidth: 242, frameHeight: 248 });
-    this.load.image('power-up-diverge',  'assets/power-up-diverge.png');
-    this.load.image('power-up-missile',  'assets/power-up-missile.png');
-    this.load.image('power-up-rapid',    'assets/power-up-rapid.png');
+    this.load.image('spaceship-default', 'assets/spaceship-default.webp');
+    this.load.image('spaceship-up',      'assets/spaceship-up.webp');
+    this.load.image('spaceship-down',    'assets/spaceship-down.webp');
+    this.load.image('sky-background',    'assets/sky-background.webp');
+    this.load.image('clouds-foreground', 'assets/clouds-foreground.webp');
+    this.load.image('boss',              'assets/boss.webp');
+    this.load.image('enemy-1',          'assets/enemy-1.webp');
+    this.load.image('enemy-2',          'assets/enemy-2.webp');
+    this.load.image('enemy-3',          'assets/enemy-3.webp');
+    this.load.image('carrier-1',         'assets/carrier-1.webp');
+    this.load.image('carrier-2',         'assets/carrier-2.webp');
+    this.load.image('carrier-3',         'assets/carrier-3.webp');
+    this.load.image('enemy-4',          'assets/enemy-4.webp');
+    this.load.image('bullet-1',          'assets/bullet-1.webp');
+    this.load.image('bullet-2',          'assets/bullet-2.webp');
+    this.load.image('bullet-3',          'assets/bullet-3.webp');
+    this.load.image('bullet-4',          'assets/bullet-4.webp');
+    this.load.image('bullet-5',          'assets/bullet-5.webp');
+    this.load.image('bullet-6',          'assets/bullet-6.webp');
+    this.load.image('bullet-7',          'assets/bullet-7.webp');
+    this.load.image('bullet-8',          'assets/bullet-8.webp');
+    this.load.image('missile',           'assets/misslie.webp');
+    this.load.spritesheet('explode', 'assets/explode.webp', { frameWidth: 242, frameHeight: 248 });
+    this.load.image('power-up-diverge',  'assets/power-up-diverge.webp');
+    this.load.image('power-up-missile',  'assets/power-up-missile.webp');
+    this.load.image('power-up-rapid',    'assets/power-up-rapid.webp');
   }
 
   create() {

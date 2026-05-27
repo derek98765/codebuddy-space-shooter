@@ -4,8 +4,8 @@ export class WinScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image('play-again-btn', 'assets/play-again-btn.png');
-    this.load.image('you-win', 'assets/you-win.png');
+    this.load.image('play-again-btn', 'assets/play-again-btn.webp');
+    this.load.image('you-win', 'assets/you-win.webp');
   }
 
   init(data) {

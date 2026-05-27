@@ -4,8 +4,8 @@ export class GameOverScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image('play-again-btn', 'assets/play-again-btn.png');
-    this.load.image('game-over',      'assets/game-over.png');
+    this.load.image('play-again-btn', 'assets/play-again-btn.webp');
+    this.load.image('game-over',      'assets/game-over.webp');
   }
 
   init(data) {

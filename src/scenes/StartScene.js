@@ -4,12 +4,12 @@ export class StartScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image('sky-background',    'assets/sky-background.png');
-    this.load.image('clouds-foreground', 'assets/clouds-foreground.png');
-    this.load.image('logo',              'assets/logo.png');
-    this.load.image('play-now-btn',      'assets/play-now-btn.png');
-    this.load.image('key-wasd',          'assets/key-wasd.png');
-    this.load.image('key-j',             'assets/key-j.png');
+    this.load.image('sky-background',    'assets/sky-background.webp');
+    this.load.image('clouds-foreground', 'assets/clouds-foreground.webp');
+    this.load.image('logo',              'assets/logo.webp');
+    this.load.image('play-now-btn',      'assets/play-now-btn.webp');
+    this.load.image('key-wasd',          'assets/key-wasd.webp');
+    this.load.image('key-j',             'assets/key-j.webp');
   }
 
   create() {
