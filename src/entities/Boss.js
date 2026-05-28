@@ -20,21 +20,26 @@ export class Boss {
    * @param {number} x
    * @param {number} y
    */
-  constructor(scene, x, y) {
+  constructor(scene, x, y, { scale = 1 } = {}) {
     this.scene = scene;
     const cfg = SPRITES.boss;
 
+    // Scaled display dimensions (hit zones scale with this too)
+    this._scale = scale;
+    const dispW = Math.round(cfg.width  * scale);
+    const dispH = Math.round(cfg.height * scale);
+
     if (scene.textures.exists(cfg.key)) {
       this.sprite = scene.physics.add.image(x, y, cfg.key);
-      this.sprite.setDisplaySize(cfg.width, cfg.height);
+      this.sprite.setDisplaySize(dispW, dispH);
     } else {
       // Fallback: procedural accent rectangle
-      this._recreateTexture(scene, 'boss_accent_tex', cfg.width, cfg.height, null, (g) => {
+      this._recreateTexture(scene, 'boss_accent_tex', dispW, dispH, null, (g) => {
         g.fillStyle(0x4444aa, 1);
-        g.fillRect(0, 0, cfg.width, cfg.height);
+        g.fillRect(0, 0, dispW, dispH);
         g.fillStyle(0x8888ff, 1);
-        g.fillRect(4, 8, 8, cfg.height - 16);
-        g.fillRect(4, 8, cfg.width - 8, 6);
+        g.fillRect(4, 8, 8, dispH - 16);
+        g.fillRect(4, 8, dispW - 8, 6);
       });
       this.sprite = scene.physics.add.image(x, y, 'boss_accent_tex');
     }
@@ -46,23 +51,28 @@ export class Boss {
 
     // 3 hitzone proxies (invisible, no texture)
     // Offsets are relative to boss sprite center, scaled from 1333x1180 → 678x600
+    // then scaled again by the runtime scale factor
     this._hitZones = [
       { offX: -13,  offY: -206, w: 216, h:  91 }, // head
       { offX:  65,  offY:   15, w: 419, h: 311 }, // main body
       { offX: -230, offY:  -23, w: 186, h:  82 }, // cannon arm
     ].map(z => {
-      const img = scene.physics.add.image(x + z.offX, y + z.offY, '__DEFAULT');
-      img.setDisplaySize(z.w, z.h);
+      const sx = Math.round(z.offX * scale);
+      const sy = Math.round(z.offY * scale);
+      const sw = Math.round(z.w    * scale);
+      const sh = Math.round(z.h    * scale);
+      const img = scene.physics.add.image(x + sx, y + sy, '__DEFAULT');
+      img.setDisplaySize(sw, sh);
       img.setAlpha(0);
       img.body.moves = false;
       img.body.setAllowGravity(false);
-      img._offX = z.offX;
-      img._offY = z.offY;
+      img._offX = sx;
+      img._offY = sy;
       return img;
     });
 
-    this.hp    = 900;
-    this.maxHp = 900;
+    this.hp    = 300;
+    this.maxHp = 300;
     this.alive = true;
 
     this.behaviorIndex    = 0;     // cycles 0–4
@@ -448,7 +458,8 @@ export class Boss {
   }
 
   _spawnChargeWindup() {
-    const mx = this.sprite.x - SPRITES.boss.width / 2;
+    const scaledW = Math.round(SPRITES.boss.width * this._scale);
+    const mx = this.sprite.x - scaledW / 2;
     const my = this.sprite.y;
     const count = this._enraged ? 5 : 3;
     for (let i = 0; i < count; i++) {
@@ -508,7 +519,8 @@ export class Boss {
 
   _fireChargeBeamTick() {
     if (!this.aimedBullets) return;
-    const mx = this.sprite.x - SPRITES.boss.width / 2;
+    const scaledW = Math.round(SPRITES.boss.width * this._scale);
+    const mx = this.sprite.x - scaledW / 2;
     const my = this.sprite.y;
 
     const coreCount = this._enraged ? 4 : 3;

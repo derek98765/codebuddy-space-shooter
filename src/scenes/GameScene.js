@@ -49,6 +49,10 @@ export class GameScene extends Phaser.Scene {
     this._W = W;
     this._H = H;
     this._score = 0;
+
+    // Detect mobile/touch device
+    this._isMobile = /Mobi|Android|iPhone|iPad|iPod|Touch/i.test(navigator.userAgent)
+      || (navigator.maxTouchPoints > 1 && window.innerWidth <= 1024);
     // ── Scrolling background ──────────────────────────────────────────────────
     this._bg = this.add.tileSprite(0, 0, W, H, 'sky-background')
       .setOrigin(0, 0)
@@ -115,7 +119,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     // ── Player ────────────────────────────────────────────────────────────────
-    this.player = new Player(this, 100, H / 2);
+    this.player = new Player(this, 100, H / 2, { isMobile: this._isMobile });
     this.player.normalBullets = this.normalBullets;
     this.player.missileBullets = this.missileBullets;
 
@@ -159,7 +163,7 @@ export class GameScene extends Phaser.Scene {
     this._paused = false;
 
     // ── Dev toolbar ───────────────────────────────────────────────────────────
-    this._initDevToolbar();
+    if (!this._isMobile) this._initDevToolbar();
   }
 
   _initDevToolbar() {
@@ -211,12 +215,13 @@ export class GameScene extends Phaser.Scene {
         console.log('[DEV] Boss already active, skipping');
         return;
       }
-      console.log('[DEV] Entering boss phase — skipping all normal waves');
-      // Mark all normal-enemy waves as triggered so they never fire
-      for (let waveId = 1; waveId <= 6; waveId++) {
-        this._wavesTriggered.add(waveId);
-      }
-      // Clear any remaining normal enemies
+      console.log('[DEV] Entering boss phase');
+
+      // Mark every normal wave + boss trigger as triggered so spawner never fires them
+      [1,2,3,4,5,6,7,8,9,10,11,12,13,20,21,22,23,24,25,
+       'diff-a1','diff-b1','diff-c1','diff-a2'].forEach(id => this._wavesTriggered.add(id));
+
+      // Remove all remaining normal enemies instantly
       for (const e of [...this.enemiesA, ...this.enemiesB, ...this.enemiesC, ...this.enemiesD, ...this.enemiesE]) {
         if (e.alive) {
           e.alive = false;
@@ -224,10 +229,20 @@ export class GameScene extends Phaser.Scene {
           e.sprite.setActive(false).setVisible(false);
         }
       }
+
+      // Max out all player power-ups
+      this.player.activatePowerUp('spread');
+      this.player.activatePowerUp('missile');
+      this.player.activatePowerUp('rapid');
+
+      // Stop scrolling, show boss alert, then spawn boss
       this._scrollLocked = true;
       this._bgScrollSpeed = 0;
-      this._wavesTriggered.add(7); // prevent wave spawner from double-spawning
-      this._spawnBoss();
+      this.game.events.emit('bossAlert');
+      this.time.delayedCall(5000, () => {
+        this.game.events.emit('bossAlertDone');
+        this._spawnBoss();
+      });
     });
 
     const btnKillBoss = mkBtn('Kill Boss', () => {
@@ -619,17 +634,29 @@ export class GameScene extends Phaser.Scene {
   _spawnBoss() {
     const W = this._W, H = this._H;
     this._bossActive = true;
-    const b = new Boss(this, W + 80, H / 2);
+
+    // On mobile, scale boss so it fits within screen height with breathing room.
+    // Target: boss occupies at most 85% of screen height.
+    // On desktop the default 678×600 sprite is used as-is (scale = 1).
+    const bossNativeH = 600; // SPRITES.boss.height
+    const bossNativeW = 678; // SPRITES.boss.width
+    const bossScale   = this._isMobile
+      ? Math.min(1, (H * 0.85) / bossNativeH)
+      : 1;
+    const bossDispW   = Math.round(bossNativeW * bossScale);
+
+    const b = new Boss(this, W + 80, H / 2, { scale: bossScale });
     b._player = this.player;
     b.spreadBullets = this.spreadBullets;
     b.aimedBullets = this.aimedBullets;
     this.boss = b;
     this._registerBoss(b);
 
-    // Slide boss onto screen
+    // Slide boss onto screen — right-edge anchored with a small margin
+    const slideTargetX = W - bossDispW / 2 - 10;
     this.tweens.add({
       targets: b.sprite,
-      x: W - 100,
+      x: slideTargetX,
       duration: 2000,
       ease: 'Power2',
       onUpdate: () => {

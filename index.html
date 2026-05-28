@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <title>Space Shooter</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -12,11 +12,68 @@
       background: #000;
       overflow: hidden;
     }
-    canvas { display: block; }
+    canvas { display: block; touch-action: none; }
+
+    /* ── Portrait-lock overlay (mobile only) ─────────────────────────────── */
+    #portrait-lock {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 99999;
+      background: #000;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+    }
+    #portrait-lock svg {
+      width: 72px;
+      height: 72px;
+      fill: #ffffff;
+      animation: rotate-hint 1.8s ease-in-out infinite;
+    }
+    @keyframes rotate-hint {
+      0%, 100% { transform: rotate(0deg); }
+      40%       { transform: rotate(-90deg); }
+      60%       { transform: rotate(-90deg); }
+    }
+    #portrait-lock p {
+      color: #ffffff;
+      font-family: monospace;
+      font-size: 18px;
+      text-align: center;
+      letter-spacing: 0.06em;
+    }
   </style>
 </head>
 <body>
+  <!-- Portrait-mode lock screen -->
+  <div id="portrait-lock">
+    <!-- Rotate phone icon -->
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path d="M16.48 2.52c3.27 1.55 5.61 4.72 5.97 8.48H24C23.44 4.84 20 1.5 15.6.12l.88 2.4zM7.52 21.48C4.25 19.94 1.91 16.76 1.55 13H0c.56 6.16 4 9.5 8.4 10.88l-.88-2.4zM15.6 23.88c4.4-1.38 7.84-4.72 8.4-10.88h-1.52c-.36 3.76-2.7 6.93-5.97 8.48l.89 2.4zM8.4.12C4 1.5.56 4.84 0 11h1.52c.36-3.76 2.7-6.93 5.97-8.48L8.4.12zM12 5c-3.87 0-7 3.13-7 7s3.13 7 7 7 7-3.13 7-7-3.13-7-7-7zm0 12c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/>
+    </svg>
+    <p>PLEASE ROTATE YOUR DEVICE<br>TO LANDSCAPE</p>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
   <script type="module" src="src/main.js"></script>
+
+  <script>
+    // Show/hide portrait lock overlay
+    (function () {
+      const overlay = document.getElementById('portrait-lock');
+      function checkOrientation() {
+        const isMobile = /Mobi|Android|iPhone|iPad|iPod|Touch/i.test(navigator.userAgent)
+          || (navigator.maxTouchPoints > 1 && window.innerWidth <= 1024);
+        if (!isMobile) { overlay.style.display = 'none'; return; }
+        const isPortrait = window.innerHeight > window.innerWidth;
+        overlay.style.display = isPortrait ? 'flex' : 'none';
+      }
+      checkOrientation();
+      window.addEventListener('resize', checkOrientation);
+      window.addEventListener('orientationchange', checkOrientation);
+    })();
+  </script>
 </body>
 </html>

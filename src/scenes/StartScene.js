@@ -16,6 +16,10 @@ export class StartScene extends Phaser.Scene {
     const W = this.scale.width;
     const H = this.scale.height;
 
+    // Detect mobile
+    const isMobile = /Mobi|Android|iPhone|iPad|iPod|Touch/i.test(navigator.userAgent)
+      || (navigator.maxTouchPoints > 1 && window.innerWidth <= 1024);
+
     // ── Background ────────────────────────────────────────────────────────────
     this._bg = this.add.tileSprite(0, 0, W, H, 'sky-background')
       .setOrigin(0, 0)
@@ -52,28 +56,40 @@ export class StartScene extends Phaser.Scene {
 
     const logoBottom = H / 2 - 130 + logoH / 2;
 
-    // ── Control key images ────────────────────────────────────────────────────
-    const keyH = 56;
-    const wasdW = keyH * (1149 / 315);
-    const jW    = keyH * (285  / 315);
-    const gap   = 48;
-    const totalW = wasdW + gap + jW;
-    const keysX  = W / 2 - totalW / 2;
-    const keysY  = logoBottom + 68;
+    // ── Control hint ──────────────────────────────────────────────────────────
+    const keysY = logoBottom + 68;
 
-    this.add.image(keysX + wasdW / 2, keysY, 'key-wasd')
-      .setDisplaySize(wasdW, keyH).setOrigin(0.5, 0.5).setDepth(10);
-    this.add.text(keysX + wasdW / 2, keysY - keyH / 2 - 14, 'MOVE', {
-      fontSize: '18px', fontFamily: 'monospace', color: '#ffffff',
-      stroke: '#000000', strokeThickness: 3,
-    }).setOrigin(0.5, 1).setDepth(10);
+    if (isMobile) {
+      // Mobile: show simple text hints
+      const hintStyle = {
+        fontSize: '16px', fontFamily: 'monospace', color: '#ffffff',
+        stroke: '#000000', strokeThickness: 3, align: 'center',
+      };
+      this.add.text(W / 2, keysY - 8, 'HOLD & DRAG  —  MOVE\nAUTO FIRE', hintStyle)
+        .setOrigin(0.5, 0.5).setDepth(10).setLineSpacing(10);
+    } else {
+      // Desktop: show key images
+      const keyH = 56;
+      const wasdW = keyH * (1149 / 315);
+      const jW    = keyH * (285  / 315);
+      const gap   = 48;
+      const totalW = wasdW + gap + jW;
+      const keysX  = W / 2 - totalW / 2;
 
-    this.add.image(keysX + wasdW + gap + jW / 2, keysY, 'key-j')
-      .setDisplaySize(jW, keyH).setOrigin(0.5, 0.5).setDepth(10);
-    this.add.text(keysX + wasdW + gap + jW / 2, keysY - keyH / 2 - 14, 'FIRE', {
-      fontSize: '18px', fontFamily: 'monospace', color: '#ffffff',
-      stroke: '#000000', strokeThickness: 3,
-    }).setOrigin(0.5, 1).setDepth(10);
+      this.add.image(keysX + wasdW / 2, keysY, 'key-wasd')
+        .setDisplaySize(wasdW, keyH).setOrigin(0.5, 0.5).setDepth(10);
+      this.add.text(keysX + wasdW / 2, keysY - keyH / 2 - 14, 'MOVE', {
+        fontSize: '18px', fontFamily: 'monospace', color: '#ffffff',
+        stroke: '#000000', strokeThickness: 3,
+      }).setOrigin(0.5, 1).setDepth(10);
+
+      this.add.image(keysX + wasdW + gap + jW / 2, keysY, 'key-j')
+        .setDisplaySize(jW, keyH).setOrigin(0.5, 0.5).setDepth(10);
+      this.add.text(keysX + wasdW + gap + jW / 2, keysY - keyH / 2 - 14, 'FIRE', {
+        fontSize: '18px', fontFamily: 'monospace', color: '#ffffff',
+        stroke: '#000000', strokeThickness: 3,
+      }).setOrigin(0.5, 1).setDepth(10);
+    }
 
     // ── Play Now button ───────────────────────────────────────────────────────
     const btnW = Math.min(W * 0.28, 240) * 1.25;

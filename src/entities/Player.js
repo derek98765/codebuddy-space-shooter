@@ -1,5 +1,6 @@
 import { SPRITES } from '../config/sprites.js';
 import { createEngineTrail } from '../utils/particles.js';
+import { MobileInput } from '../utils/mobileInput.js';
 
 export const PLAYER_SPEED = 291;
 
@@ -9,9 +10,10 @@ export class Player {
    * @param {number} x
    * @param {number} y
    */
-  constructor(scene, x, y) {
+  constructor(scene, x, y, { isMobile = false } = {}) {
     this.scene = scene;
     this.game = scene.game;
+    this.isMobile = isMobile;
 
     // Physics rectangle as the visual/body
     const cfg = SPRITES.player;
@@ -28,12 +30,15 @@ export class Player {
     // Reduce hitbox to 90% of display size
     this.sprite.body.setSize(cfg.width * 0.9, cfg.height * 0.9);
 
-    // Input — WASD movement, J fire
+    // Input — WASD movement, J fire (keyboard)
     this.keyW = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
     this.keyA = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
     this.keyS = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S);
     this.keyD = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
     this.keyJ = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.J);
+
+    // Mobile touch input
+    this._mobileInput = isMobile ? new MobileInput(scene) : null;
 
     // Shooting state
     this.fireTimer = 0;
@@ -113,17 +118,27 @@ export class Player {
     const sp = this.sprite;
     const { keyW, keyA, keyS, keyD } = this;
 
-    // Movement — WASD
+    // Movement — WASD (keyboard) or touch drag direction (mobile)
     let vx = 0, vy = 0;
-    if (keyA.isDown) vx = -PLAYER_SPEED;
-    if (keyD.isDown) vx =  PLAYER_SPEED;
-    if (keyW.isDown) vy = -PLAYER_SPEED;
-    if (keyS.isDown) vy =  PLAYER_SPEED;
 
-    if (vx !== 0 && vy !== 0) {
-      vx *= 0.7071;
-      vy *= 0.7071;
+    if (this._mobileInput) {
+      // Mobile: direction is determined by drag direction from touch-down point
+      const dir = this._mobileInput.getDirection();
+      vx = dir.vx * PLAYER_SPEED;
+      vy = dir.vy * PLAYER_SPEED;
+    } else {
+      // Desktop: WASD
+      if (keyA.isDown) vx = -PLAYER_SPEED;
+      if (keyD.isDown) vx =  PLAYER_SPEED;
+      if (keyW.isDown) vy = -PLAYER_SPEED;
+      if (keyS.isDown) vy =  PLAYER_SPEED;
+
+      if (vx !== 0 && vy !== 0) {
+        vx *= 0.7071;
+        vy *= 0.7071;
+      }
     }
+
     sp.setVelocity(vx, vy);
 
     // Swap ship sprite based on vertical direction
@@ -144,13 +159,15 @@ export class Player {
       }
     }
 
-    // ── Firing — J key ─────────────────────────────────────────────────────
-    if (Phaser.Input.Keyboard.JustDown(this.keyJ)) {
+    // ── Firing ─────────────────────────────────────────────────────────────
+    // On mobile: auto-fire always. On desktop: hold J key.
+    const wantFire = this.isMobile || this.keyJ.isDown;
+
+    if (!this.isMobile && Phaser.Input.Keyboard.JustDown(this.keyJ)) {
       this.fireTimer = 0;
     }
 
-    if (this.keyJ.isDown && this.normalBullets) {
-      // Clear laser if previously active
+    if (wantFire && this.normalBullets) {
       if (this._laserActive) this._clearLaser();
 
       this.fireTimer -= delta;
@@ -353,6 +370,7 @@ export class Player {
   destroy() {
     this._clearLaser();
     this._laserGfx.destroy();
+    if (this._mobileInput) this._mobileInput.destroy();
     this.sprite.destroy();
   }
 }
