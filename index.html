@@ -115,11 +115,25 @@
       align-items: center;
       gap: 20px;
     }
+    #landscape-prompt .ready-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    #landscape-prompt .ready-row svg {
+      width: 22px; height: 22px;
+      fill: none;
+      stroke: #4caf50;
+      stroke-width: 2.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      flex-shrink: 0;
+    }
     #landscape-prompt p {
-      color: #888;
+      color: #4caf50;
       font-family: monospace;
       font-size: 13px;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.06em;
     }
     #btn-start-game {
       padding: 14px 52px;
@@ -155,7 +169,10 @@
     </div>
     <!-- Shown once landscape is detected: tap to start -->
     <div id="landscape-prompt">
-      <p>GOOD TO GO</p>
+      <div class="ready-row">
+        <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+        <p>You are now in landscape mode</p>
+      </div>
       <button id="btn-start-game">TAP TO START</button>
     </div>
   </div>
