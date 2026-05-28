@@ -48,16 +48,25 @@ export class StartScene extends Phaser.Scene {
 
     // ── Logo ──────────────────────────────────────────────────────────────────
     const logoW = Math.min(W * 0.5, 690);
-    const logoH = logoW * (668 / 1536);
-    this.add.image(W / 2, H / 2 - 130, 'logo')
+    const logoH = Math.min(logoW * (668 / 1536), H * 0.30);
+
+    // Measure all elements then stack vertically, centered in H
+    const hintBlockH = isMobile ? 40 : 56;
+    const btnW       = Math.min(W * 0.28, 240) * 1.25;
+    const btnH       = btnW * (567 / 1568);
+    const gap1       = Math.max(H * 0.055, 24);
+    const gap2       = Math.max(H * 0.055, 24);
+    const totalH     = logoH + gap1 + hintBlockH + gap2 + btnH;
+    const stackTop   = (H - totalH) / 2;
+
+    const logoY      = stackTop + logoH / 2;
+    const logoBottom = stackTop + logoH;
+    const keysY      = logoBottom + gap1 + hintBlockH / 2;
+
+    this.add.image(W / 2, logoY, 'logo')
       .setDisplaySize(logoW, logoH)
       .setOrigin(0.5, 0.5)
       .setDepth(10);
-
-    const logoBottom = H / 2 - 130 + logoH / 2;
-
-    // ── Control hint ──────────────────────────────────────────────────────────
-    const keysY = logoBottom + 68;
 
     if (isMobile) {
       // Mobile: show simple text hints
@@ -92,10 +101,8 @@ export class StartScene extends Phaser.Scene {
     }
 
     // ── Play Now button ───────────────────────────────────────────────────────
-    const btnW = Math.min(W * 0.28, 240) * 1.25;
-    const btnH = btnW * (567 / 1568);
-    const btnX  = W / 2;
-    const btnY  = logoBottom + 196;
+    const btnX = W / 2;
+    const btnY = logoBottom + gap1 + hintBlockH + gap2;
 
     const playBtn = this.add.image(btnX, btnY, 'play-now-btn')
       .setDisplaySize(btnW, btnH)

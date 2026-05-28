@@ -19,27 +19,34 @@ export class WinScene extends Phaser.Scene {
     // Dark overlay
     this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.85).setDepth(0);
 
-    // YOU WIN image — 1632×474 source, displayed at 55% screen width
-    const titleW = Math.min(W * 0.55, 600);
-    const titleH = titleW * (474 / 1632);
-    const titleY = H / 2 - 80;
+    // Stack all elements vertically centered in H
+    const titleW  = Math.min(W * 0.55, 600);
+    const titleH  = Math.min(titleW * (474 / 1632), H * 0.25);
+    const scoreFs = Math.max(Math.min(Math.round(H * 0.04), 24), 14);
+    const btnW    = Math.min(W * 0.5, 300);
+    const btnH    = btnW * (564 / 1586);
+    const gap1    = Math.max(H * 0.05, 16);
+    const gap2    = Math.max(H * 0.05, 16);
+    const totalH  = titleH + gap1 + scoreFs + gap2 + btnH;
+    const top     = (H - totalH) / 2;
+
+    const titleY = top + titleH / 2;
+    const scoreY = top + titleH + gap1 + scoreFs / 2;
+    const btnY   = top + titleH + gap1 + scoreFs + gap2 + btnH / 2;
+
     this.add.image(W / 2, titleY, 'you-win')
       .setDisplaySize(titleW, titleH)
       .setOrigin(0.5, 0.5)
       .setDepth(2);
 
     // Final score
-    const scoreY = titleY + titleH / 2 + 48;
     this.add.text(W / 2, scoreY, 'SCORE  ' + this._score, {
-      fontSize: '20px',
+      fontSize: scoreFs + 'px',
       fontFamily: 'monospace',
       color: '#44ffaa',
     }).setOrigin(0.5, 0.5).setDepth(2);
 
     // Play Again button
-    const btnW = Math.min(W * 0.28, 240) * 1.25;
-    const btnH = btnW * (564 / 1586);
-    const btnY  = scoreY + 64;
     const playBtn = this.add.image(W / 2, btnY, 'play-again-btn')
       .setDisplaySize(btnW, btnH)
       .setOrigin(0.5, 0.5)
@@ -57,13 +64,6 @@ export class WinScene extends Phaser.Scene {
     const restart = () => { this.scene.start('StartScene'); this.scene.stop(); };
     this.input.keyboard.once('keydown-SPACE', restart);
     this.input.keyboard.once('keydown-ENTER', restart);
-
-    // Hint text
-    this.add.text(W / 2, btnY + btnH / 2 + 18, 'or press SPACE / ENTER', {
-      fontSize: '12px',
-      fontFamily: 'monospace',
-      color: '#337755',
-    }).setOrigin(0.5, 0.5).setDepth(2);
 
     // Star particles (simple twinkling rects)
     const gfx = this.add.graphics().setDepth(1);

@@ -14,8 +14,8 @@
     }
     canvas { display: block; touch-action: none; }
 
-    /* ── Portrait-lock overlay (mobile only) ─────────────────────────────── */
-    #portrait-lock {
+    /* ── Orientation overlay (mobile only) ──────────────────────────────────── */
+    #orient-overlay {
       display: none;
       position: fixed;
       inset: 0;
@@ -24,55 +24,195 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 24px;
+      gap: 28px;
     }
-    #portrait-lock svg {
-      width: 72px;
-      height: 72px;
-      fill: #ffffff;
-      animation: rotate-hint 1.8s ease-in-out infinite;
+
+    /* ── Portrait prompt ──────────────────────────────────────────────────────── */
+    #portrait-prompt {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 28px;
     }
-    @keyframes rotate-hint {
-      0%, 100% { transform: rotate(0deg); }
-      40%       { transform: rotate(-90deg); }
-      60%       { transform: rotate(-90deg); }
+    .phone-row {
+      display: flex;
+      align-items: center;
+      gap: 18px;
     }
-    #portrait-lock p {
-      color: #ffffff;
+    /* Portrait phone shape */
+    .ph-portrait {
+      width: 32px; height: 54px;
+      border: 3px solid #fff;
+      border-radius: 7px;
+      position: relative;
+      flex-shrink: 0;
+    }
+    .ph-portrait::before {
+      content: '';
+      position: absolute;
+      top: 5px; left: 50%; transform: translateX(-50%);
+      width: 9px; height: 3px;
+      background: #fff; border-radius: 2px;
+    }
+    .ph-portrait::after {
+      content: '';
+      position: absolute;
+      bottom: 5px; left: 50%; transform: translateX(-50%);
+      width: 7px; height: 7px;
+      border: 2px solid #fff; border-radius: 50%;
+    }
+    /* Arrow */
+    .ph-arrow {
+      animation: arrow-nudge 1.6s ease-in-out infinite;
+    }
+    .ph-arrow svg { width: 24px; height: 24px; fill: #fff; display: block; }
+    @keyframes arrow-nudge {
+      0%, 100% { transform: translateX(0); opacity: 1; }
+      50%       { transform: translateX(5px); opacity: 0.5; }
+    }
+    /* Landscape phone shape */
+    .ph-landscape {
+      width: 54px; height: 32px;
+      border: 3px solid #fff;
+      border-radius: 7px;
+      position: relative;
+      flex-shrink: 0;
+    }
+    .ph-landscape::before {
+      content: '';
+      position: absolute;
+      left: 5px; top: 50%; transform: translateY(-50%);
+      width: 3px; height: 9px;
+      background: #fff; border-radius: 2px;
+    }
+    .ph-landscape::after {
+      content: '';
+      position: absolute;
+      right: 5px; top: 50%; transform: translateY(-50%);
+      width: 7px; height: 7px;
+      border: 2px solid #fff; border-radius: 50%;
+    }
+    #portrait-prompt h2 {
+      color: #fff;
       font-family: monospace;
-      font-size: 18px;
+      font-size: 20px;
+      font-weight: bold;
+      letter-spacing: 0.1em;
       text-align: center;
-      letter-spacing: 0.06em;
     }
+    #portrait-prompt p {
+      color: #888;
+      font-family: monospace;
+      font-size: 13px;
+      letter-spacing: 0.06em;
+      text-align: center;
+    }
+
+    /* ── Landscape ready prompt ───────────────────────────────────────────────── */
+    #landscape-prompt {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+    #landscape-prompt p {
+      color: #888;
+      font-family: monospace;
+      font-size: 13px;
+      letter-spacing: 0.08em;
+    }
+    #btn-start-game {
+      padding: 14px 52px;
+      background: transparent;
+      border: 2px solid #fff;
+      border-radius: 4px;
+      color: #fff;
+      font-family: monospace;
+      font-size: 20px;
+      font-weight: bold;
+      letter-spacing: 0.12em;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.15s;
+    }
+    #btn-start-game:active { background: rgba(255,255,255,0.15); }
   </style>
 </head>
 <body>
-  <!-- Portrait-mode lock screen -->
-  <div id="portrait-lock">
-    <!-- Rotate phone icon -->
-    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-      <path d="M16.48 2.52c3.27 1.55 5.61 4.72 5.97 8.48H24C23.44 4.84 20 1.5 15.6.12l.88 2.4zM7.52 21.48C4.25 19.94 1.91 16.76 1.55 13H0c.56 6.16 4 9.5 8.4 10.88l-.88-2.4zM15.6 23.88c4.4-1.38 7.84-4.72 8.4-10.88h-1.52c-.36 3.76-2.7 6.93-5.97 8.48l.89 2.4zM8.4.12C4 1.5.56 4.84 0 11h1.52c.36-3.76 2.7-6.93 5.97-8.48L8.4.12zM12 5c-3.87 0-7 3.13-7 7s3.13 7 7 7 7-3.13 7-7-3.13-7-7-7zm0 12c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/>
-    </svg>
-    <p>PLEASE ROTATE YOUR DEVICE<br>TO LANDSCAPE</p>
+  <!-- Mobile orientation overlay -->
+  <div id="orient-overlay">
+    <!-- Shown in portrait: rotate instruction -->
+    <div id="portrait-prompt">
+      <div class="phone-row">
+        <div class="ph-portrait"></div>
+        <div class="ph-arrow">
+          <svg viewBox="0 0 24 24"><path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/></svg>
+        </div>
+        <div class="ph-landscape"></div>
+      </div>
+      <h2>ROTATE TO PLAY</h2>
+      <p>This game requires landscape mode</p>
+    </div>
+    <!-- Shown once landscape is detected: tap to start -->
+    <div id="landscape-prompt">
+      <p>GOOD TO GO</p>
+      <button id="btn-start-game">TAP TO START</button>
+    </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
   <script type="module" src="src/main.js"></script>
 
   <script>
-    // Show/hide portrait lock overlay
     (function () {
-      const overlay = document.getElementById('portrait-lock');
-      function checkOrientation() {
-        const isMobile = /Mobi|Android|iPhone|iPad|iPod|Touch/i.test(navigator.userAgent)
-          || (navigator.maxTouchPoints > 1 && window.innerWidth <= 1024);
-        if (!isMobile) { overlay.style.display = 'none'; return; }
-        const isPortrait = window.innerHeight > window.innerWidth;
-        overlay.style.display = isPortrait ? 'flex' : 'none';
+      var overlay         = document.getElementById('orient-overlay');
+      var portraitPrompt  = document.getElementById('portrait-prompt');
+      var landscapePrompt = document.getElementById('landscape-prompt');
+      var startBtn        = document.getElementById('btn-start-game');
+
+      function isMobile() {
+        return /Mobi|Android|iPhone|iPad|iPod|Touch/i.test(navigator.userAgent)
+          || (navigator.maxTouchPoints > 1);
       }
-      checkOrientation();
-      window.addEventListener('resize', checkOrientation);
-      window.addEventListener('orientationchange', checkOrientation);
+
+      function isPortrait() {
+        if (window.screen && window.screen.orientation && window.screen.orientation.type) {
+          return window.screen.orientation.type.indexOf('portrait') !== -1;
+        }
+        return window.innerHeight > window.innerWidth;
+      }
+
+      if (!isMobile()) return;
+
+      var startedFromPortrait = false;
+
+      function update() {
+        setTimeout(function () {
+          if (isPortrait()) {
+            startedFromPortrait = true;
+            overlay.style.display = 'flex';
+            portraitPrompt.style.display = 'flex';
+            landscapePrompt.style.display = 'none';
+          } else if (startedFromPortrait) {
+            // User rotated to landscape — show tap-to-start
+            overlay.style.display = 'flex';
+            portraitPrompt.style.display = 'none';
+            landscapePrompt.style.display = 'flex';
+          } else {
+            // Opened directly in landscape — no overlay needed
+            overlay.style.display = 'none';
+          }
+        }, 150);
+      }
+
+      // Tapping the button just hides the overlay — Phaser is already running
+      startBtn.addEventListener('click', function () {
+        overlay.style.display = 'none';
+      });
+
+      update();
+      window.addEventListener('resize', update);
+      window.addEventListener('orientationchange', update);
     })();
   </script>
 </body>

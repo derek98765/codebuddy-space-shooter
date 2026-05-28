@@ -19,27 +19,35 @@ export class GameOverScene extends Phaser.Scene {
     // Dark overlay
     this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.85).setDepth(0);
 
-    // Game Over logo
-    const logoW = Math.min(W * 0.6, 520);
-    const logoH = logoW * (735 / 1313);
-    const logoY = H / 2 - logoH / 2 - 20;
+    // Stack all elements vertically centered in H
+    const logoW   = Math.min(W * 0.6, 520);
+    const logoH   = Math.min(logoW * (735 / 1313), H * 0.38);
+    const scoreFs = Math.max(Math.min(Math.round(H * 0.055), 36), 18);
+    const btnW    = Math.min(W * 0.5, 300);
+    const btnH    = btnW * (564 / 1586);
+    const gap1    = Math.max(H * 0.045, 16);
+    const gap2    = Math.max(H * 0.045, 16);
+    const totalH  = logoH + gap1 + scoreFs + gap2 + btnH;
+    const top     = (H - totalH) / 2;
+
+    const logoY  = top + logoH / 2;
+    const scoreY = top + logoH + gap1 + scoreFs / 2;
+    const btnY   = top + logoH + gap1 + scoreFs + gap2 + btnH / 2;
+
     this.add.image(W / 2, logoY, 'game-over')
       .setDisplaySize(logoW, logoH)
       .setOrigin(0.5, 0.5)
       .setDepth(2);
 
     // Final score
-    const scoreY = logoY + logoH / 2 + 44;
     this.add.text(W / 2, scoreY, 'SCORE  ' + this._score, {
-      fontSize: '36px',
+      fontSize: scoreFs + 'px',
       fontFamily: 'monospace',
       color: '#ff8888',
     }).setOrigin(0.5, 0.5).setDepth(2);
 
     // Restart button
-    const btnW = Math.min(W * 0.28, 240) * 1.25;
-    const btnH = btnW * (564 / 1586);
-    const playBtn = this.add.image(W / 2, scoreY + 72, 'play-again-btn')
+    const playBtn = this.add.image(W / 2, btnY, 'play-again-btn')
       .setDisplaySize(btnW, btnH)
       .setOrigin(0.5, 0.5)
       .setDepth(3)
@@ -56,13 +64,6 @@ export class GameOverScene extends Phaser.Scene {
     const restart = () => { this.scene.start('StartScene'); this.scene.stop(); };
     this.input.keyboard.once('keydown-SPACE', restart);
     this.input.keyboard.once('keydown-ENTER', restart);
-
-    // Hint text
-    this.add.text(W / 2, scoreY + 72 + btnH / 2 + 24, 'or press SPACE / ENTER', {
-      fontSize: '12px',
-      fontFamily: 'monospace',
-      color: '#883333',
-    }).setOrigin(0.5, 0.5).setDepth(2);
 
     // Flash-in animation
     this.cameras.main.setAlpha(0);
