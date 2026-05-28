@@ -160,15 +160,13 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
-  <script type="module" src="src/main.js"></script>
-
   <script>
     (function () {
       var overlay         = document.getElementById('orient-overlay');
       var portraitPrompt  = document.getElementById('portrait-prompt');
       var landscapePrompt = document.getElementById('landscape-prompt');
       var startBtn        = document.getElementById('btn-start-game');
+      var phaserLoaded    = false;
 
       function isMobile() {
         return /Mobi|Android|iPhone|iPad|iPod|Touch/i.test(navigator.userAgent)
@@ -182,37 +180,61 @@
         return window.innerHeight > window.innerWidth;
       }
 
-      if (!isMobile()) return;
+      function loadPhaser() {
+        if (phaserLoaded) return;
+        phaserLoaded = true;
+        var s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js';
+        s.onload = function () {
+          var m = document.createElement('script');
+          m.type = 'module';
+          m.src = 'src/main.js';
+          document.body.appendChild(m);
+        };
+        document.body.appendChild(s);
+      }
 
-      var startedFromPortrait = false;
+      // Non-mobile: load immediately
+      if (!isMobile()) {
+        loadPhaser();
+        return;
+      }
 
-      function update() {
+      // Mobile, already landscape on load: load immediately, no overlay
+      if (!isPortrait()) {
+        overlay.style.display = 'none';
+        loadPhaser();
+        return;
+      }
+
+      // Mobile, portrait on load: show overlay, defer Phaser until tap
+      var startedFromPortrait = true;
+      overlay.style.display = 'flex';
+      portraitPrompt.style.display = 'flex';
+      landscapePrompt.style.display = 'none';
+
+      function onOrientationChange() {
         setTimeout(function () {
-          if (isPortrait()) {
-            startedFromPortrait = true;
-            overlay.style.display = 'flex';
-            portraitPrompt.style.display = 'flex';
-            landscapePrompt.style.display = 'none';
-          } else if (startedFromPortrait) {
-            // User rotated to landscape — show tap-to-start
+          if (!isPortrait() && startedFromPortrait) {
             overlay.style.display = 'flex';
             portraitPrompt.style.display = 'none';
             landscapePrompt.style.display = 'flex';
-          } else {
-            // Opened directly in landscape — no overlay needed
-            overlay.style.display = 'none';
+          } else if (isPortrait()) {
+            overlay.style.display = 'flex';
+            portraitPrompt.style.display = 'flex';
+            landscapePrompt.style.display = 'none';
           }
         }, 150);
       }
 
-      // Tapping the button just hides the overlay — Phaser is already running
+      // TAP TO START: load Phaser now (correct landscape dims) then hide overlay
       startBtn.addEventListener('click', function () {
         overlay.style.display = 'none';
+        loadPhaser();
       });
 
-      update();
-      window.addEventListener('resize', update);
-      window.addEventListener('orientationchange', update);
+      window.addEventListener('resize', onOrientationChange);
+      window.addEventListener('orientationchange', onOrientationChange);
     })();
   </script>
 </body>
