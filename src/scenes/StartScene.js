@@ -130,6 +130,9 @@ export class StartScene extends Phaser.Scene {
     // ── Input: click / tap ────────────────────────────────────────────────────
     this.input.once('pointerdown', () => this._startGame());
 
+    // Signal the HTML overlay that the game is ready (mobile loading screen)
+    if (typeof window.__onGameReady === 'function') window.__onGameReady();
+
     // ── Fade in ───────────────────────────────────────────────────────────────
     this.cameras.main.setAlpha(0);
     this.tweens.add({

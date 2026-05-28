@@ -150,6 +150,37 @@
       transition: background 0.15s;
     }
     #btn-start-game:active { background: rgba(255,255,255,0.15); }
+
+    /* ── Loading screen ─────────────────────────────────────────────────────── */
+    #loading-screen {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+    #loading-screen p {
+      color: #ffffff;
+      font-family: monospace;
+      font-size: 16px;
+      letter-spacing: 0.12em;
+      animation: loading-pulse 1.2s ease-in-out infinite;
+    }
+    @keyframes loading-pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+    .loading-dots span {
+      display: inline-block;
+      animation: dot-bounce 1.2s ease-in-out infinite;
+      font-size: 24px;
+      color: #fff;
+    }
+    .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes dot-bounce {
+      0%, 80%, 100% { opacity: 0.2; transform: translateY(0); }
+      40%            { opacity: 1;   transform: translateY(-6px); }
+    }
   </style>
 </head>
 <body>
@@ -175,6 +206,13 @@
       </div>
       <button id="btn-start-game">TAP TO START</button>
     </div>
+    <!-- Shown while Phaser is loading -->
+    <div id="loading-screen">
+      <p>LOADING</p>
+      <div class="loading-dots">
+        <span>·</span><span>·</span><span>·</span>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -182,8 +220,14 @@
       var overlay         = document.getElementById('orient-overlay');
       var portraitPrompt  = document.getElementById('portrait-prompt');
       var landscapePrompt = document.getElementById('landscape-prompt');
+      var loadingScreen   = document.getElementById('loading-screen');
       var startBtn        = document.getElementById('btn-start-game');
       var phaserLoaded    = false;
+
+      // Called by main.js once the first Phaser scene is ready
+      window.__onGameReady = function () {
+        overlay.style.display = 'none';
+      };
 
       function isMobile() {
         return /Mobi|Android|iPhone|iPad|iPod|Touch/i.test(navigator.userAgent)
@@ -244,9 +288,10 @@
         }, 150);
       }
 
-      // TAP TO START: load Phaser now (correct landscape dims) then hide overlay
+      // TAP TO START: show loading screen, then load Phaser
       startBtn.addEventListener('click', function () {
-        overlay.style.display = 'none';
+        landscapePrompt.style.display = 'none';
+        loadingScreen.style.display = 'flex';
         loadPhaser();
       });
 
