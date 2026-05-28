@@ -163,7 +163,7 @@ export class GameScene extends Phaser.Scene {
     this._paused = false;
 
     // ── Dev toolbar ───────────────────────────────────────────────────────────
-    if (!this._isMobile) this._initDevToolbar();
+    // if (!this._isMobile) this._initDevToolbar();
   }
 
   _initDevToolbar() {
